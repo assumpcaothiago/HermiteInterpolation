@@ -1,0 +1,20 @@
+# Python caches
+__pycache__/
+*.py[cod]
+
+# LaTeX intermediate files
+*.aux
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc
+*.xdv
+
+# Compiled notes (reference PDFs elsewhere are source material)
+/notes/*.pdf
+
+# Editor and operating-system files
+*~
+.DS_Store
