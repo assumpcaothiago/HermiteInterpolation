@@ -1,0 +1,610 @@
+\documentclass[11pt]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage[a4paper,margin=28mm]{geometry}
+\usepackage{microtype}
+\usepackage[hidelinks]{hyperref}
+
+\newcommand{\dd}{\mathop{}\!\mathrm{d}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\Q}{\mathcal{Q}}
+\newcommand{\I}{\mathcal{I}}
+\newcommand{\D}{\mathcal{D}}
+\newcommand{\be}{\boldsymbol{e}}
+\newcommand{\bj}{\boldsymbol{j}}
+\newcommand{\bi}{\boldsymbol{i}}
+\newcommand{\bt}{\boldsymbol{t}}
+\newcommand{\bx}{\boldsymbol{x}}
+\newcommand{\balpha}{\boldsymbol{\alpha}}
+\newcommand{\bbeta}{\boldsymbol{\beta}}
+
+\title{Quintic Hermite Interpolation\\
+  \large Self-contained mathematical notes for one and several dimensions}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+These notes derive the quintic Hermite interpolant determined by values and
+first two derivatives at the ends of an interval.  They then derive the
+six-point, value-only variant obtained when those derivatives are replaced by
+fourth-order centered differences, and extend both constructions by tensor
+products.  Particular care is given to orientation signs, dimensional
+scaling, continuity, polynomial reproduction, truncation error, and the
+difference between the exact-jet construction of Timmes and Swesty
+\cite{timmes-swesty} and the uniform-grid construction described for
+\texttt{SPHINCS\_BSSN} by Rosswog and Diener \cite{rosswog-diener}.  Explicit
+formulas in the appendix are generated and checked with exact arithmetic by
+the accompanying SymPy script.
+\end{abstract}
+
+\tableofcontents
+
+\section{Conventions and the two interpolation problems}
+\label{sec:conventions}
+
+Let
+\[
+  x_i<x_{i+1},\qquad h=x_{i+1}-x_i>0,
+  \qquad t=\frac{x-x_i}{h}\in[0,1].
+\]
+Primes on a function denote physical derivatives with respect to $x$, while
+primes on a polynomial in $t$, such as $w_j'(t)$, denote derivatives with
+respect to $t$.  Thus
+\begin{equation}
+  \frac{\dd^q}{\dd x^q}=h^{-q}\frac{\dd^q}{\dd t^q}.
+  \label{eq:physical-scaling}
+\end{equation}
+
+Two related constructions must be kept distinct.
+\begin{enumerate}
+  \item The \emph{exact-jet interpolant} takes
+  $f,f',f''$ at both endpoints as data.  It is the unique polynomial of
+  degree at most five satisfying all six conditions.  Its value error is
+  $O(h^6)$ for a smooth function.
+  \item The \emph{uniform-grid, value-only interpolant} first approximates
+  the endpoint derivatives by centered differences and substitutes those
+  estimates into the same polynomial.  Each cell polynomial is still
+  quintic, but the resulting interpolation operator is generically only
+  fifth-order accurate in value.
+\end{enumerate}
+The first is the mathematical construction used by Timmes and Swesty; the
+second is the construction used in the cited \texttt{SPHINCS\_BSSN}
+description.  Calling either method ``fifth order'' can therefore refer to
+polynomial degree or to the convergence order of the value-only operator; the
+meaning should always be stated.
+
+\section{The exact one-dimensional interpolant}
+\label{sec:exact-1d}
+
+\subsection{Conditions, monomial form, and uniqueness}
+
+Define the dimensionless endpoint jets
+\begin{equation}
+  F_{e,r}=h^r f^{(r)}(x_{i+e}),
+  \qquad e\in\{0,1\},\quad r\in\{0,1,2\}.
+  \label{eq:normalized-jets}
+\end{equation}
+For $H(t)=\sum_{k=0}^{5}c_k t^k$, the left conditions immediately give
+$c_0=F_{0,0}$, $c_1=F_{0,1}$, and $c_2=F_{0,2}/2$.  The right conditions
+then give the $3\times3$ system
+\begin{equation}
+  \begin{pmatrix}
+    1&1&1\\ 3&4&5\\ 6&12&20
+  \end{pmatrix}
+  \begin{pmatrix}c_3\\c_4\\c_5\end{pmatrix}
+  =
+  \begin{pmatrix}
+    F_{1,0}-c_0-c_1-c_2\\
+    F_{1,1}-c_1-2c_2\\
+    F_{1,2}-2c_2
+  \end{pmatrix}.
+  \label{eq:monomial-system}
+\end{equation}
+Its explicit solution is recorded in \hyperref[app:formulas]{Appendix~A}.
+This also proves existence.  For uniqueness, the difference of two solutions
+has zeros of multiplicity three at both $t=0$ and $t=1$.  A nonzero such
+polynomial is divisible by $t^3(t-1)^3$, which has degree six, and hence
+cannot have degree at most five.
+
+\subsection{Cardinal basis and the orientation sign}
+
+It is convenient to begin with three left-end basis functions,
+\begin{align}
+  \psi_0(t)&=1-10t^3+15t^4-6t^5,\nonumber\\
+  \psi_1(t)&=t-6t^3+8t^4-3t^5,\label{eq:psi-basis}\\
+  \psi_2(t)&=\tfrac12\bigl(t^2-3t^3+3t^4-t^5\bigr).\nonumber
+\end{align}
+The basis at either endpoint is most safely defined in one formula:
+\begin{equation}
+  B_{e,r}(t)=(-1)^{er}\,
+  \psi_r\!\left(e+(1-2e)t\right),
+  \qquad e\in\{0,1\},\quad r\in\{0,1,2\}.
+  \label{eq:oriented-basis}
+\end{equation}
+The factor $(-1)^{er}$ compensates for differentiating the reflected
+argument at the right endpoint.  In particular,
+\(B_{1,1}(t)=-\psi_1(1-t)\), whereas
+\(B_{1,0}(t)=\psi_0(1-t)\) and
+\(B_{1,2}(t)=\psi_2(1-t)\).  Direct differentiation gives the cardinal
+conditions
+\begin{equation}
+  \left.\frac{\dd^s B_{e,r}}{\dd t^s}\right|_{t=q}
+  =\delta_{eq}\delta_{rs},
+  \qquad q,e\in\{0,1\},\quad r,s\in\{0,1,2\}.
+  \label{eq:cardinality}
+\end{equation}
+Consequently the interpolant is
+\begin{equation}
+  H_i[f](x)=
+  \sum_{e=0}^{1}\sum_{r=0}^{2}
+  h^r f^{(r)}(x_{i+e})B_{e,r}(t).
+  \label{eq:exact-hermite}
+\end{equation}
+The powers of $h$ are essential: together with
+\eqref{eq:physical-scaling} and \eqref{eq:cardinality}, they give
+\(H_i^{(r)}(x_{i+e})=f^{(r)}(x_{i+e})\) for $r=0,1,2$.  Expanded basis
+derivatives through second order are given in
+\hyperref[app:formulas]{Appendix~A}.
+
+\subsection{Remainder, reproduction, and
+  \texorpdfstring{$C^2$}{C2} assembly}
+
+The standard repeated-node Hermite remainder is, for each interior $x$,
+\begin{equation}
+  f(x)-H_i[f](x)
+  =\frac{f^{(6)}(\xi_x)}{6!}
+    (x-x_i)^3(x-x_{i+1})^3,
+  \qquad \xi_x\in(x_i,x_{i+1}),
+  \label{eq:exact-remainder}
+\end{equation}
+under the usual smoothness assumptions.  Equivalently, its magnitude is
+$O(h^6)$ at a fixed normalized position.  Every polynomial of degree at most
+five is reproduced exactly.
+
+If one polynomial is built on every interval and the same value, first
+derivative, and second derivative are assigned to a shared node, the two
+adjacent polynomials have identical derivatives through order two there.
+The piecewise interpolant is therefore $C^2$.  These assigned jets may be
+exact data or consistent approximations; continuity is an algebraic property
+of sharing them, not an accuracy statement about them.
+
+\section{Uniform-grid closure using values only}
+\label{sec:value-only-1d}
+
+\subsection{Centered derivative formulas from moments}
+
+Now suppose $x_i=x_0+ih$ is a uniform grid and only $f_i=f(x_i)$ is
+available.  Write a five-point approximation in the form
+\[
+  \D_r f_i=h^{-r}\sum_{k=-2}^{2}a_k^{(r)}f_{i+k}.
+\]
+Matching the Taylor series through degree four imposes
+\begin{equation}
+  \sum_{k=-2}^{2}a_k^{(r)}k^m=r!\,\delta_{mr},
+  \qquad m=0,\ldots,4.
+  \label{eq:fd-moments}
+\end{equation}
+Solving these exact moment equations gives
+\begin{align}
+  \D_1 f_i
+  &=\frac{f_{i-2}-8f_{i-1}+8f_{i+1}-f_{i+2}}{12h},
+  \label{eq:fd-first}\\
+  \D_2 f_i
+  &=\frac{-f_{i-2}+16f_{i-1}-30f_i+16f_{i+1}-f_{i+2}}{12h^2}.
+  \label{eq:fd-second}
+\end{align}
+Their leading defects are
+\begin{align}
+  \D_1 f_i&=f'_i-\frac{h^4}{30}f_i^{(5)}+O(h^6),
+  \label{eq:fd-first-error}\\
+  \D_2 f_i&=f''_i-\frac{h^4}{90}f_i^{(6)}+O(h^6).
+  \label{eq:fd-second-error}
+\end{align}
+Thus both derivative estimates are fourth-order accurate.  The cancellation
+of the odd moments in \eqref{eq:fd-second} explains why matching only through
+degree four still leaves an $O(h^4)$, rather than $O(h^3)$, error.
+
+\subsection{Collection into six grid weights}
+
+Let $a_k=a_k^{(1)}$, $b_k=a_k^{(2)}$, and define them to be zero outside
+$-2\leq k\leq2$.  In increasing index order,
+\begin{equation}
+  (a_{-2},\ldots,a_2)=\frac1{12}(1,-8,0,8,-1),\qquad
+  (b_{-2},\ldots,b_2)=\frac1{12}(-1,16,-30,16,-1).
+  \label{eq:fd-coefficients}
+\end{equation}
+Substituting \(\D_1 f_i,\D_2 f_i\) and their shifted counterparts at
+$i+1$ into \eqref{eq:exact-hermite}, then collecting values, gives
+\begin{equation}
+  \I_h f(x_i+th)=\sum_{j=-2}^{3}w_j(t)f_{i+j},
+  \label{eq:six-point-interpolant}
+\end{equation}
+where
+\begin{equation}
+  \boxed{
+  w_j=\delta_{j0}B_{0,0}+\delta_{j1}B_{1,0}
+      +a_j B_{0,1}+a_{j-1}B_{1,1}
+      +b_j B_{0,2}+b_{j-1}B_{1,2}.}
+  \label{eq:collected-weight}
+\end{equation}
+All basis functions in \eqref{eq:collected-weight} are evaluated at $t$.
+The six explicit polynomials and their first two derivatives are given in
+\hyperref[app:formulas]{Appendix~A}.
+
+The endpoint values and derivatives of the weights recover precisely the
+data and stencils used to build them:
+\begin{align}
+  w_j(0)&=\delta_{j0},& w_j(1)&=\delta_{j1},\nonumber\\
+  w_j'(0)&=a_j,& w_j'(1)&=a_{j-1},\label{eq:weight-endpoints}\\
+  w_j''(0)&=b_j,& w_j''(1)&=b_{j-1}.\nonumber
+\end{align}
+After applying the factors $h^{-1}$ and $h^{-2}$, these are
+\eqref{eq:fd-first} and \eqref{eq:fd-second}.  A neighboring cell uses the
+same nodal stencils at its common endpoint.  Hence the value-only piecewise
+interpolant is exactly $C^2$ at interior grid points, even though its nodal
+derivatives are approximations.
+
+\subsection{Symmetry, moments, and truncation error}
+
+The weights obey
+\begin{align}
+  \sum_{j=-2}^{3}w_j(t)&=1,
+  \label{eq:partition-unity}\\
+  w_j(t)&=w_{1-j}(1-t),
+  \label{eq:weight-reflection}\\
+  \sum_{j=-2}^{3}j^m w_j(t)&=t^m,
+  \qquad m=0,1,2,3,4.
+  \label{eq:weight-moments}
+\end{align}
+Thus constants are preserved, reflection about the cell midpoint merely
+reverses the stencil, and all polynomials through degree four are reproduced.
+The first failed moment is
+\begin{equation}
+  \sum_{j=-2}^{3}j^5w_j(t)-t^5
+  =4t(t-1)(2t-1)(3t^2-3t-1).
+  \label{eq:fifth-moment-defect}
+\end{equation}
+This identity is a useful regression test: although each cell expression has
+degree five in $t$, the value-only operator is not generally exact on a
+quintic function.
+
+Let $E_h=\I_h f-f$, with both terms evaluated at $x_i+th$, and set
+\begin{equation}
+  A(t)=\frac{t(t-1)(2t-1)(3t^2-3t-1)}{30}.
+  \label{eq:A-def}
+\end{equation}
+Taylor expansion about $x_i$, using \eqref{eq:fifth-moment-defect}, yields
+\begin{align}
+  E_h&=h^5A(t)f^{(5)}(x_i)+O(h^6),
+  \label{eq:value-error}\\
+  \frac{\dd E_h}{\dd x}
+  &=\frac{h^4}{30}
+    (30t^4-60t^3+30t^2-1)f^{(5)}(x_i)+O(h^5),
+  \label{eq:first-derivative-error}\\
+  \frac{\dd^2E_h}{\dd x^2}
+  &=2h^3t(t-1)(2t-1)f^{(5)}(x_i)+O(h^4).
+  \label{eq:second-derivative-error}
+\end{align}
+The generic accuracies of the interpolated value, first derivative, and
+second derivative are therefore fifth, fourth, and third order,
+respectively.  At a grid endpoint the leading term in
+\eqref{eq:second-derivative-error} vanishes and the fourth-order stencil
+accuracy \eqref{eq:fd-second-error} is recovered.
+
+At the midpoint the weights reduce to the symmetric vector
+\begin{equation}
+  \bigl(w_{-2},w_{-1},w_0,w_1,w_2,w_3\bigr)_{t=1/2}
+  =\frac1{256}(3,-25,150,150,-25,3).
+  \label{eq:midpoint-weights}
+\end{equation}
+The fifth-degree defect vanishes there, so the value is superconvergent:
+\begin{equation}
+  E_h\big|_{t=1/2}
+  =\frac{5}{1024}h^6f^{(6)}(x_{i+1/2})+O(h^7).
+  \label{eq:midpoint-value-error}
+\end{equation}
+The first derivative remains fourth-order, with leading coefficient
+$7h^4f^{(5)}/240$, while the second derivative improves to fourth order:
+\begin{equation}
+  \left.\frac{\dd^2E_h}{\dd x^2}\right|_{t=1/2}
+  =-\frac{259}{5760}h^4f^{(6)}(x_{i+1/2})+O(h^5).
+  \label{eq:midpoint-second-error}
+\end{equation}
+
+The weights are not all nonnegative; for example
+$w_{-1}(1/2)=w_2(1/2)=-25/256$.  The scheme therefore preserves neither
+positivity, monotonicity, nor general bounds, and it can overshoot near sharp
+features.  Quintic degree and $C^2$ continuity do not imply shape
+preservation.
+
+\section{Exact tensor-product Hermite interpolation}
+\label{sec:exact-tensor}
+
+\subsection{General rectangular cell}
+
+Consider a $d$-dimensional rectangular cell.  In coordinate $k$, let its
+left grid index be $i_k$, its width be $h_k>0$, and
+\[
+  t_k=\frac{x_k-x_{k,i_k}}{h_k}\in[0,1].
+\]
+For a corner \(\be\in\{0,1\}^d\), let \(\bx_{\bi+\be}\) denote its physical
+position.  For a componentwise derivative multi-index
+\(\balpha\in\{0,1,2\}^d\), use
+\[
+  |\balpha|=\sum_{k=1}^d\alpha_k,\qquad
+  \partial^{\balpha}=\prod_{k=1}^d\partial_{x_k}^{\alpha_k},\qquad
+    \boldsymbol{h}^{\balpha}=\prod_{k=1}^d h_k^{\alpha_k}.
+\]
+The exact tensor-product interpolant is
+\begin{equation}
+  \boxed{
+  \I_{\mathrm H}f(\bx)=
+  \sum_{\be\in\{0,1\}^d}
+  \sum_{\balpha\in\{0,1,2\}^d}
+  \boldsymbol{h}^{\balpha}
+  (\partial^{\balpha}f)(\bx_{\bi+\be})
+  \prod_{k=1}^d B_{e_k,\alpha_k}(t_k).}
+  \label{eq:exact-tensor}
+\end{equation}
+It belongs to
+\begin{equation}
+  \Q_5^{(d)}
+  =\operatorname{span}\left\{
+    \bt^{\boldsymbol{\nu}}:0\leq\nu_k\leq5
+    \text{ for every }k\right\},
+  \qquad \dim\Q_5^{(d)}=6^d.
+  \label{eq:Q5}
+\end{equation}
+Here ``quintic in $d$ dimensions'' means degree at most five in \emph{each}
+coordinate; it does not mean total degree at most five.
+
+Taking normalized derivatives and using \eqref{eq:cardinality} shows that
+\eqref{eq:exact-tensor} reproduces every prescribed corner datum
+\(\partial^{\bbeta}f\), \(\bbeta\in\{0,1,2\}^d\).  There are
+$2^d3^d=6^d$ such conditions, matching \eqref{eq:Q5}; tensor cardinality
+also proves uniqueness.  Because each factor is a polynomial, mixed
+derivatives commute identically.
+
+Across a face shared by two cells, the traces of the normal derivatives of
+orders zero, one, and two are the same $(d-1)$-dimensional Hermite
+polynomials built from the shared face data.  Tangential differentiation of
+those identical traces proves continuity of every derivative of total order
+at most two.  Thus a consistently shared grid jet produces a global $C^2$
+piecewise tensor interpolant even when the rectangular widths vary from cell
+to cell.
+
+\subsection{The 36-condition biquintic}
+
+For $d=2$, each of the four corners supplies the nine fields
+\begin{equation}
+  \left\{\partial_x^r\partial_y^s f:0\leq r,s\leq2\right\}
+  =\{f,f_x,f_y,f_{xx},f_{xy},f_{yy},
+      f_{xxy},f_{xyy},f_{xxyy}\}.
+  \label{eq:nine-fields}
+\end{equation}
+Equation \eqref{eq:exact-tensor}, with $d=2$, is therefore a compact and
+unambiguous representation of all $4\times9=36$ terms of the biquintic.
+Expanding those terms is unnecessary and makes index, sign, and spacing
+mistakes harder to detect.
+
+The total-order-two jet has only the first six fields in
+\eqref{eq:nine-fields}.  The three higher ``twist'' fields are additional
+data needed to select a unique full tensor polynomial in \(\Q_5^{(2)}\).
+They are not intrinsically fixed merely by demanding $C^2$ agreement at the
+vertices.  To obtain $C^2$ face traces, however, whatever exact values or
+closure convention is chosen for them must be shared by neighboring cells.
+Exact tabulated jets, a consistent zero convention, or the separable
+finite-difference construction of Section~\ref{sec:grid-tensor} all close this
+freedom; they generally produce different interiors.
+
+\subsection{The 216-condition triquintic}
+
+For $d=3$, each corner supplies $3^3=27$ fields
+\begin{equation}
+  \left\{\partial_x^r\partial_y^s\partial_z^q f:
+  0\leq r,s,q\leq2\right\},
+  \label{eq:27-fields}
+\end{equation}
+including mixed derivatives up to $f_{xxyyzz}$.  The eight corners give
+$8\times27=216$ conditions, exactly the dimension of \(\Q_5^{(3)}\).
+Again, \eqref{eq:exact-tensor} is the complete 216-term formula; no expanded
+list is mathematically useful.
+
+\section{The separable \texorpdfstring{$6^d$}{6d}-point value-only stencil}
+\label{sec:grid-tensor}
+
+On a Cartesian grid that is uniform along each coordinate direction (the
+spacings $h_k$ may differ between directions), applying the one-dimensional
+value-only operator successively gives
+\begin{equation}
+  \boxed{
+  \I_{\mathrm G}f(\bx)=
+  \sum_{\bj\in\{-2,-1,0,1,2,3\}^d}
+  f_{\bi+\bj}\prod_{k=1}^d w_{j_k}(t_k).}
+  \label{eq:grid-tensor}
+\end{equation}
+This is a $6^d$-sample stencil: 36 values in two dimensions and 216 values
+in three dimensions.  Algebraically, it is also what results from
+\eqref{eq:exact-tensor} when every componentwise corner derivative is formed
+by applying the centered one-dimensional difference operators in the
+corresponding directions.  The tensor form fixes all higher twist data
+consistently and makes the order of successive directional interpolations
+irrelevant.
+
+For any multi-index \(\boldsymbol{\gamma}\) with nonnegative components,
+differentiation is especially simple:
+\begin{equation}
+  \partial^{\boldsymbol{\gamma}}\I_{\mathrm G}f
+  =\sum_{\bj}f_{\bi+\bj}
+    \prod_{k=1}^d
+    h_k^{-\gamma_k}w_{j_k}^{(\gamma_k)}(t_k).
+  \label{eq:grid-mixed-derivative}
+\end{equation}
+In particular, with $a\neq b$,
+\begin{align}
+  \partial_{x_a}\I_{\mathrm G}f
+  &=\sum_{\bj}f_{\bi+\bj}\,
+    h_a^{-1}w'_{j_a}(t_a)
+    \prod_{k\neq a}w_{j_k}(t_k),
+  \label{eq:grid-gradient}\\
+  \partial_{x_a}^2\I_{\mathrm G}f
+  &=\sum_{\bj}f_{\bi+\bj}\,
+    h_a^{-2}w''_{j_a}(t_a)
+    \prod_{k\neq a}w_{j_k}(t_k),
+  \label{eq:grid-hessian-diagonal}\\
+  \partial_{x_a}\partial_{x_b}\I_{\mathrm G}f
+  &=\sum_{\bj}f_{\bi+\bj}\,
+    (h_a h_b)^{-1}w'_{j_a}(t_a)w'_{j_b}(t_b)
+    \prod_{k\neq a,b}w_{j_k}(t_k).
+  \label{eq:grid-hessian-offdiagonal}
+\end{align}
+
+Partition of unity and reflection symmetry follow by taking products of
+\eqref{eq:partition-unity} and \eqref{eq:weight-reflection}.  The operator
+reproduces \(\Q_4^{(d)}\), because each one-dimensional factor reproduces
+degrees zero through four.  For comparable spacings, the generic accuracy of
+a derivative with each \(\gamma_k\leq2\) is governed by the largest
+per-coordinate derivative order, not by \(|\boldsymbol{\gamma}|\): values are
+fifth order, gradients and off-diagonal Hessian entries are fourth order, and
+diagonal Hessian entries are third order.  At the center of every coordinate
+interval, values are sixth order and all Hessian entries are fourth order,
+while gradients remain fourth order.  Shared centered stencils and
+\eqref{eq:weight-endpoints} give $C^2$ agreement across every interior grid
+face.
+
+The numerical counts in the exact-jet and value-only descriptions coincide
+but refer to different data.  The Timmes--Swesty biquintic uses 36 independent
+corner-jet conditions.  Its direct three-dimensional analogue uses 216
+corner-jet conditions.  The \texttt{SPHINCS\_BSSN} construction instead uses
+36 or 216 neighboring \emph{function values}, from which all needed jets are
+implicitly reconstructed by separable centered differences.
+
+\section{Mathematical errata in the source presentations}
+\label{sec:errata}
+
+The compact oriented and tensor notation above was chosen in part to expose
+typographical errors in the supplied sources.  The corrections below concern
+the formulas, not the numerical conclusions of either paper.
+
+\subsection{Rosswog and Diener}
+
+In the displayed one-dimensional Hermite polynomial of
+\cite{rosswog-diener}, the right-end first-derivative term is printed with a
+plus sign.  It must be
+\begin{equation}
+  -h f'_{i+1}\psi_1(1-t),
+  \label{eq:sphincs-sign-correction}
+\end{equation}
+as follows from the chain rule or \eqref{eq:oriented-basis}.  This is not a
+cosmetic convention: with $h=1$ and $f(x)=x$, the printed plus-sign
+expression equals $x+2\psi_1(1-t)$, so it fails even the linear regression
+test.  The paper's centered first-derivative numerator also closes the
+subscript with a parenthesis after $i+2$; that character should be a brace,
+giving $f_{i+2}$, with the coefficients
+otherwise exactly those in \eqref{eq:fd-first}.  In the three-dimensional
+stencil prose, independent coordinate indices should be used rather than the
+same $i$ for all three axes.
+
+\subsection{Timmes and Swesty}
+
+Equation~(16) of \cite{timmes-swesty} has the correct minus sign on the
+reflected right first-derivative basis.  The long 36-term equation~(17),
+however, contains several transcription errors; the correct formula is the
+$d=2$ specialization of \eqref{eq:exact-tensor}.  In particular:
+\begin{itemize}
+  \item the density and temperature basis directions are interchanged
+  systematically relative to the normalized coordinates in equation~(18)
+  and to the Appendix routine;
+  \item two first--first mixed entries contain an extra density derivative in
+  their labels, and should both be $F_{T\rho}$;
+  \item the $F_{\rho\rho T}|_{i+1,j}$ entry has the scale
+  $(\Delta T)^2(\Delta\rho)^2$, which should be
+  \(\Delta T(\Delta\rho)^2\);
+  \item the temperature cell endpoints and the denominator defining the
+  temperature coordinate require $T_j,T_{j+1}$, not $T_i,T_{i+1}$; and
+  equation~(19) should express $F_{T\rho}=F_{\rho T}$, rather than repeat the
+  same ordering on both sides.
+\end{itemize}
+The printed Appendix routine is likewise biquintic, not ``bicubic.''  In its
+first $F_{\rho T T}$ contribution, the array name must denote that third
+derivative (\texttt{fdtt}), not the fourth derivative
+\texttt{fddtt}; the normalized temperature derivative also divides by the
+temperature spacing \texttt{dt}, not the undefined \texttt{dti}.
+
+Finally, derivatives of a biquintic do not in general become ``biquartic''
+and then ``bicubic'' in both variables.  In multidegree notation,
+\begin{equation}
+  H_\rho\in\Q_{4,5},\quad H_T\in\Q_{5,4},\quad
+  H_{\rho\rho}\in\Q_{3,5},\quad
+  H_{\rho T}\in\Q_{4,4},\quad
+  H_{TT}\in\Q_{5,3}.
+  \label{eq:anisotropic-degrees}
+\end{equation}
+Terms such as $\rho^2H_\rho$ in thermodynamic identities can change these
+degrees further.  The terms ``biquartic'' and ``bicubic'' in the source are
+therefore at best loose shorthand, not exact degree classifications.
+
+\section{Verification boundary and assumptions}
+\label{sec:scope}
+
+The accompanying \texttt{derive\_hermite.py} uses exact SymPy rationals to
+derive the cardinal bases, solve the monomial and finite-difference moment
+systems, collect the six grid weights, and generate
+\texttt{generated\_formulas.tex}.  Its checks include endpoint cardinality,
+equivalence of basis and monomial forms, exact-jet reproduction through
+degree five, failure of the source's plus-sign variant on a linear function,
+the finite-difference defects, weight moments and symmetry, midpoint
+superconvergence, and matching through the second derivative across cells.
+Tensor checks cover all 36 and 216 corner conditions, componentwise degree
+bounds, axis exchange, mixed-partial commutation, and shared-face
+continuity.  Thus the generated appendix is both a readable formula table and
+an exact symbolic audit trail.
+
+The mathematical scope is as follows.
+\begin{itemize}
+  \item Exact-jet formulas allow arbitrary positive rectangular cell widths.
+  The centered value-only closure assumes a Cartesian grid uniform along each
+  axis and an interior stencil extending two nodes left and three nodes right
+  of the active cell.
+  \item Functions are assumed smooth enough for every derivative and error
+  term stated.  The formulas are scalar but apply componentwise to vector and
+  tensor fields.
+  \item Boundary closures, ghost-zone policies, floating-point evaluation,
+  operation ordering, optimization, limiting, and production implementation
+  are deliberately outside the scope of these notes.
+\end{itemize}
+
+\appendix
+\section{Generated explicit formulas}
+\label{app:formulas}
+
+The following formulas are generated deterministically by the symbolic
+derivation script.  They are included rather than copied by hand so that the
+document and its executable algebra cannot silently diverge.
+
+\input{generated_formulas.tex}
+
+\begin{thebibliography}{9}
+
+\bibitem{rosswog-diener}
+S.~Rosswog and P.~Diener,
+``\texttt{SPHINCS\_BSSN}: A general relativistic Smooth Particle
+Hydrodynamics code for dynamical spacetimes,''
+\emph{Classical and Quantum Gravity} \textbf{38} (2021) 115002,
+\href{https://doi.org/10.1088/1361-6382/abee65}{doi:10.1088/1361-6382/abee65}.
+
+\bibitem{timmes-swesty}
+F.~X. Timmes and F.~D. Swesty,
+``The Accuracy, Consistency, and Speed of an Electron-Positron Equation of
+State Based on Table Interpolation of the Helmholtz Free Energy,''
+\emph{The Astrophysical Journal Supplement Series} \textbf{126} (2000)
+501--516,
+\href{https://doi.org/10.1086/313304}{doi:10.1086/313304}.
+
+\end{thebibliography}
+
+\end{document}
