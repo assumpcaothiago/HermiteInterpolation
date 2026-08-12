@@ -14,6 +14,7 @@ __pycache__/
 
 # Compiled notes (reference PDFs elsewhere are source material)
 /notes/*.pdf
+/kerr_notes/*.pdf
 
 # Standalone C library build products
 /hermite3d/build/

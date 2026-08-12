@@ -16,6 +16,8 @@ interpolated at that point.
   its public C API, tests, and detailed usage documentation.
 - [`notes/`](notes/) contains the LaTeX article, exact SymPy derivations, and
   the generated formula appendix.
+- [`kerr_notes/`](kerr_notes/) contains checked, axis-regular formulas for the
+  subextremal Kerr metric in modified quasi-isotropic Cartesian coordinates.
 - [`references/`](references/) contains the source material used when deriving
   and checking the mathematics.
 - [`mathematica_notebooks/`](mathematica_notebooks/) contains earlier symbolic
@@ -107,6 +109,12 @@ The exact symbolic verification can also be run without compiling LaTeX:
 
 ```sh
 python3 notes/derive_hermite.py --check
+```
+
+The independent Kerr notes and their symbolic checks can be built with:
+
+```sh
+make -C kerr_notes check
 ```
 
 ## Numerical scope

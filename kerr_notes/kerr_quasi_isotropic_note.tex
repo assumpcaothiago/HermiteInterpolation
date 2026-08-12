@@ -1,0 +1,310 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=0.82in]{geometry}
+\usepackage{amsmath,amssymb,bm,mathtools}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage[colorlinks=true,linkcolor=blue!45!black,citecolor=blue!45!black,urlcolor=blue!45!black]{hyperref}
+
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\RBL}{R}
+\newcommand{\vpi}{\varpi}
+
+\title{Kerr Spacetime in Liu--Etienne--Shapiro\\Modified Quasi-Isotropic Coordinates\\[0.35em]\large Numerically Stable Subextremal Form}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+\vspace{-2.2em}
+
+\paragraph{Scope and conventions.}
+This note derives the non-boosted Kerr metric in the puncture-adapted radial coordinate used in Sec.~5.1 of Ref.~\cite{Assumpcao2024}, following Liu, Etienne, and Shapiro (LES)~\cite{Liu2009}. We use signature $(-,+,+,+)$ and geometrized units $G=c=1$. Throughout,
+\begin{equation}
+ M>0,\qquad |a|<M,\qquad r>0, \label{eq:domain}
+\end{equation}
+where $a=J/M$. Thus only subextremal Kerr is considered. The Boyer--Lindquist radius is denoted by $\RBL$ and the LES radius by $r$.
+
+\section{Boyer--Lindquist form}
+
+In Boyer--Lindquist coordinates $(t,\RBL,\theta,\phi)$, define
+\begin{align}
+ \Sigma &= \RBL^2+a^2\cos^2\theta, &
+ \Delta &= \RBL^2-2M\RBL+a^2=(\RBL-r_+)(\RBL-r_-), \label{eq:BLdefs1}\\
+ A&=(\RBL^2+a^2)^2-a^2\Delta\sin^2\theta, &
+ r_\pm&=M\pm d,\qquad d\equiv\sqrt{M^2-a^2}>0. \label{eq:BLdefs2}
+\end{align}
+The line element is
+\begin{align}
+ \dd s^2={}&-\left(1-\frac{2M\RBL}{\Sigma}\right)\dd t^2
+ -\frac{4Ma\RBL\sin^2\theta}{\Sigma}\,\dd t\,\dd\phi
+ +\frac{\Sigma}{\Delta}\dd\RBL^2+\Sigma\dd\theta^2
+ +\frac{A\sin^2\theta}{\Sigma}\dd\phi^2 . \label{eq:BLmetric}
+\end{align}
+
+\section{LES radial coordinate and its domain}
+
+Set
+\begin{equation}
+ s\equiv\frac{r_+}{4},
+ \qquad
+ \RBL(r)=r\left(1+\frac{s}{r}\right)^2
+          =\frac{(r+s)^2}{r}. \label{eq:LESmap}
+\end{equation}
+This is the LES modified quasi-isotropic radius, not the conventional Kerr quasi-isotropic radius $\RBL=r+M+(M^2-a^2)/(4r)$. Its basic properties are
+\begin{equation}
+ \RBL-r_+=\frac{(r-s)^2}{r},\qquad
+ \frac{\dd\RBL}{\dd r}=1-\frac{s^2}{r^2},\qquad
+ \RBL(r)=\RBL\!\left(\frac{s^2}{r}\right). \label{eq:mapproperties}
+\end{equation}
+Consequently, $\RBL\geq r_+$ and the coordinate does not cover the black-hole interior. On the doubled constant-$t$ spatial slice, the intervals $0<r<s$ and $r>s$ are two copies of the Kerr exterior joined at the throat $r=s$, while $r\to0$ and $r\to\infty$ are the two asymptotically flat ends. In particular, $r=0$ is a puncture representing the second infinity, not a regular Cartesian origin.
+
+For stable numerical evaluation, define the nonnegative quantities
+\begin{equation}
+ P\equiv\RBL-r_+=\frac{(r-s)^2}{r},\qquad
+ Q\equiv\RBL-r_-=P+(r_+-r_-)=P+2d, \label{eq:PQ}
+\end{equation}
+and compute
+\begin{equation}
+ \boxed{\RBL=r_++P,\qquad \Delta=PQ.} \label{eq:stableRDelta}
+\end{equation}
+These forms avoid subtracting nearly equal quantities at the horizon. Away from $r=s$, cancellation of $(r-s)^2$ gives
+\begin{equation}
+ \frac{1}{\Delta}\left(\frac{\dd\RBL}{\dd r}\right)^2
+ =\frac{(r+s)^2}{r^3Q}. \label{eq:radialfactor}
+\end{equation}
+For subextremal Kerr, the right-hand side supplies the continuous extension to $r=s$.
+
+Define
+\begin{equation}
+ B\equiv\frac{\Sigma(r+s)^2}{r^3Q}. \label{eq:Bdef}
+\end{equation}
+Then
+\begin{equation}
+ B(s)=\frac{4\Sigma(s,\theta)}{s(r_+-r_-)}
+     =\frac{2\Sigma(s,\theta)}{sd}, \label{eq:Bhorizon}
+\end{equation}
+so the physical radial metric coefficient is finite at the subextremal horizon. At exact extremality $d=0$, which is excluded by Eq.~\eqref{eq:domain}, this extension fails and $B\propto(r-s)^{-2}$.
+
+More explicitly, at exact extremality $s=M/4$ and
+\begin{equation}
+ B_{\mathrm{ext}}=
+ \frac{\Sigma(r+s)^2}{r^2(r-s)^2}
+ \sim
+ \frac{4M^2(1+\cos^2\theta)}{(r-M/4)^2}
+ \qquad (r\to M/4). \label{eq:Bextremal}
+\end{equation}
+This divergence is why the exact-extremal case is not covered by the formulas advertised here as numerically regular.
+
+Substituting the radial map into Eq.~\eqref{eq:BLmetric} gives
+\begin{equation}
+ \boxed{
+ \begin{aligned}
+ g_{tt}&=-\left(1-\frac{2M\RBL}{\Sigma}\right),
+ &g_{t\phi}&=-\frac{2Ma\RBL\sin^2\theta}{\Sigma},\\
+ g_{rr}&=B,
+ &g_{\theta\theta}&=\Sigma,
+ &g_{\phi\phi}&=\frac{A\sin^2\theta}{\Sigma}.
+ \end{aligned}} \label{eq:sphericalcomponents}
+\end{equation}
+
+\subsection{Spherical ADM and conformal variables}
+
+Using
+\begin{equation}
+ \dd s^2=-\alpha^2\dd t^2
+ +\gamma_{ij}(\dd x^i+\beta^i\dd t)(\dd x^j+\beta^j\dd t), \label{eq:ADMline}
+\end{equation}
+one obtains
+\begin{equation}
+ \boxed{
+ \alpha^2=\frac{\Delta\Sigma}{A},\qquad
+ \beta^\phi=-\frac{2Ma\RBL}{A},\qquad
+ (\gamma_{ij})_{(r,\theta,\phi)}=
+ \operatorname{diag}\!\left(B,\Sigma,\frac{A\sin^2\theta}{\Sigma}\right).} \label{eq:ADMspherical}
+\end{equation}
+The LES convention $\alpha\geq0$ gives the stable expression
+\begin{equation}
+ \alpha=|r-s|\sqrt{\frac{Q\Sigma}{rA}}. \label{eq:lapsestable}
+\end{equation}
+A smooth lapse across the doubled spatial slice may instead be assigned the sign of $r-s$; the four-metric depends only on $\alpha^2$.
+
+The finite spatial extension at the throat does not make $(t,r,\theta,\phi)$ a regular four-dimensional coordinate chart there. In the Cartesian coordinates introduced below,
+\begin{equation}
+ \det\gamma=\frac{BA}{r^4},\qquad
+ \det g=-\alpha^2\det\gamma=-\frac{\Delta\Sigma B}{r^4}, \label{eq:determinants}
+\end{equation}
+and hence $\det g=0$ at $r=s$. The open regions $0<r<s$ and $r>s$ are two separate regular spacetime charts. On the doubled constant-$t$ slice, $\gamma_{ij}$ extends smoothly and remains positive definite at $r=s$; the displayed lapse and shift also have finite extensions. Nevertheless, the assembled four-metric is degenerate there, so horizon-penetrating coordinates are required to include the horizon as a regular Lorentzian point.
+
+The conformal factor chosen in Ref.~\cite{Assumpcao2024} is $\psi^4=B$. As $r\to0$,
+\begin{equation}
+ B\sim\frac{s^4}{r^4},\qquad
+ \gamma_{ij}\sim\frac{s^4}{r^4}\delta_{ij}. \label{eq:puncturebehavior}
+\end{equation}
+Thus the physical metric must never be evaluated at $r=0$. The conformal metric $\widetilde\gamma_{ij}=B^{-1}\gamma_{ij}$ has the continuous flat limit $\delta_{ij}$ there, but for $a\neq0$ it is generally not differentiable at the compactified puncture. In the Cartesian variables introduced below, with $x_i=(x,y,z)$ and $n_i=x_i/r$, one has
+\begin{equation}
+ \widetilde\gamma_{ij}
+ =\delta_{ij}+\frac{r_-}{s^2}r\left(n_i n_j-\delta_{ij}\right)
+ +O(r^2). \label{eq:conformalpuncture}
+\end{equation}
+For $a\neq0$, the constant-$t$ spatial slice is not conformally flat, as established invariantly by its nonzero Cotton--York tensor; see Refs.~\cite{GaratPrice2000,ValienteKroon2004}.
+
+\section{Cartesian change of basis}
+
+Use the ordinary spherical-polar Cartesian map constructed from the LES radius,
+\begin{equation}
+ x=r\sin\theta\cos\phi,\qquad
+ y=r\sin\theta\sin\phi,\qquad
+ z=r\cos\theta. \label{eq:cartmap}
+\end{equation}
+Let $X^\mu=(t,x,y,z)$ and $q^a=(t,r,\theta,\phi)$. The covariant metric transforms as
+\begin{equation}
+ g^{(C)}_{\mu\nu}=J^a{}_{\mu}J^b{}_{\nu}g^{(S)}_{ab},
+ \qquad
+ J^a{}_{\mu}=\frac{\partial q^a}{\partial X^\mu}. \label{eq:basistransform}
+\end{equation}
+Writing $\vpi^2=x^2+y^2$ and $r^2=\vpi^2+z^2$, the inverse-coordinate Jacobian away from the polar axis is
+\begin{equation}
+ J^a{}_{\mu}=
+ \begin{pmatrix}
+ 1&0&0&0\\
+ 0&x/r&y/r&z/r\\
+ 0&xz/(r^2\vpi)&yz/(r^2\vpi)&-\vpi/r^2\\
+ 0&-y/\vpi^2&x/\vpi^2&0
+ \end{pmatrix}. \label{eq:jacobian}
+\end{equation}
+The $\vpi^{-1}$ factors belong only to the singular intermediate spherical basis; they cancel from the Cartesian tensor.
+
+For cancellation-free evaluation, compute
+\begin{align}
+ \Sigma&=\RBL^2+a^2\frac{z^2}{r^2}, \label{eq:SigmaCartesian}\\
+ A&=\Sigma^2+a^2\frac{\vpi^2}{r^2}(\Sigma+2M\RBL), \label{eq:Apositive}\\
+ L&\equiv\frac{\Sigma}{r^2},
+ &D&\equiv B-L=\frac{\Sigma r_-}{r^2Q},
+ &C&\equiv\frac{a^2(\Sigma+2M\RBL)}{\Sigma r^4}. \label{eq:LDC}
+\end{align}
+Equation~\eqref{eq:Apositive} follows from
+\begin{equation}
+ A-\Sigma^2=a^2\sin^2\theta\,(\Sigma+2M\RBL) \label{eq:Aidentity}
+\end{equation}
+and avoids subtracting the two large terms in the Boyer--Lindquist definition of $A$. Likewise, the expression for $D$ avoids subtracting $B-L$ near either asymptotic end.
+
+Define the regular Cartesian vectors
+\begin{equation}
+ n_i=\frac{(x,y,z)}{r},\qquad m_i=(-y,x,0). \label{eq:nm}
+\end{equation}
+Direct evaluation of Eq.~\eqref{eq:basistransform}, followed by Eq.~\eqref{eq:Aidentity}, gives the axis-regular spatial metric
+\begin{equation}
+ \boxed{\gamma_{ij}=L\delta_{ij}+D n_i n_j+C m_i m_j.} \label{eq:regularmetric}
+\end{equation}
+This formula contains no $\vpi^{-2}$ factors and should be used for numerical evaluation everywhere, including on the rotation axis.
+
+\section{Full Cartesian four-metric}
+
+Set
+\begin{equation}
+ H\equiv\frac{2Ma\RBL}{\Sigma r^2}. \label{eq:Hdef}
+\end{equation}
+All independent nonzero components of the four-metric are
+\begin{equation}
+ g_{tt}=-\left(1-\frac{2M\RBL}{\Sigma}\right),\qquad
+ g_{tx}=Hy,\qquad g_{ty}=-Hx,\qquad g_{tz}=0, \label{eq:gtime}
+\end{equation}
+and
+\begin{align}
+ g_{xx}=\gamma_{xx}&=L+D\frac{x^2}{r^2}+Cy^2, &
+ g_{yy}=\gamma_{yy}&=L+D\frac{y^2}{r^2}+Cx^2, \label{eq:gdiagxy}\\
+ g_{zz}=\gamma_{zz}&=L+D\frac{z^2}{r^2}, &
+ g_{xy}=\gamma_{xy}&=D\frac{xy}{r^2}-Cxy, \label{eq:gzzxy}\\
+ g_{xz}=\gamma_{xz}&=D\frac{xz}{r^2}, &
+ g_{yz}=\gamma_{yz}&=D\frac{yz}{r^2}. \label{eq:gxzyz}
+\end{align}
+Symmetry gives $g_{\nu\mu}=g_{\mu\nu}$. Therefore
+\begin{equation}
+ (g_{\mu\nu})_{(t,x,y,z)}=
+ \begin{pmatrix}
+ g_{tt}&Hy&-Hx&0\\
+ Hy&\gamma_{xx}&\gamma_{xy}&\gamma_{xz}\\
+ -Hx&\gamma_{xy}&\gamma_{yy}&\gamma_{yz}\\
+ 0&\gamma_{xz}&\gamma_{yz}&\gamma_{zz}
+ \end{pmatrix}. \label{eq:gmatrix}
+\end{equation}
+On the rotation axis $(x,y)=(0,0)$, Eq.~\eqref{eq:regularmetric} gives directly
+\begin{equation}
+ \gamma_{xx}=\gamma_{yy}=L=\frac{\Sigma}{r^2},\qquad
+ \gamma_{zz}=B,\qquad
+ \gamma_{xy}=\gamma_{xz}=\gamma_{yz}=0. \label{eq:axisvalues}
+\end{equation}
+
+\section{Cartesian ADM variables}
+
+The lapse is given by Eqs.~\eqref{eq:ADMspherical} and \eqref{eq:lapsestable}. Since $\partial(x,y,z)/\partial\phi=(-y,x,0)$, the contravariant shift is
+\begin{equation}
+ \boxed{
+ (\beta^x,\beta^y,\beta^z)
+ =\left(\frac{2Ma\RBL}{A}y,-\frac{2Ma\RBL}{A}x,0\right).} \label{eq:betaup}
+\end{equation}
+Its covariant components are
+\begin{equation}
+ \boxed{(\beta_x,\beta_y,\beta_z)=(Hy,-Hx,0).} \label{eq:betadown}
+\end{equation}
+Together with Eq.~\eqref{eq:regularmetric}, these expressions satisfy directly
+\begin{equation}
+ \gamma_{ij}\beta^j=\beta_i,
+ \qquad
+ -\alpha^2+\beta_i\beta^i=g_{tt}. \label{eq:ADMchecks}
+\end{equation}
+No derivatives of the metric or ADM fields are considered here.
+
+\section{Numerically stable evaluation order}
+
+For a Cartesian point $(x,y,z)\neq(0,0,0)$ in either open chart $0<r<s$ or $r>s$, a stable implementation should evaluate
+\begin{equation}
+ r^2\ \longrightarrow\ r\ \longrightarrow\ (d,r_\pm,s)\ \longrightarrow\
+ (P,Q,\RBL,\Delta)\ \longrightarrow\ (\Sigma,A,B,L,D,C,H), \label{eq:evalorder}
+\end{equation}
+then assemble Eqs.~\eqref{eq:gtime}--\eqref{eq:gxzyz} and the ADM variables. In particular:
+\begin{itemize}
+ \item compute $d=\sqrt{(M-|a|)(M+|a|)}$, $r_+=M+d$, and $r_-=a^2/r_+$; these forms avoid cancellation near $|a|=M$ and $a=0$, respectively;
+ \item use $\Delta=PQ$, never $\RBL^2-2M\RBL+a^2$ near the horizon;
+ \item use Eq.~\eqref{eq:Apositive}, not a difference of large terms;
+ \item use the explicit expression for $D$ in Eq.~\eqref{eq:LDC}, not $B-L$;
+ \item use Eq.~\eqref{eq:regularmetric}, never formulas containing $\vpi^{-2}$;
+ \item at $r=s$, use only the continuous spatial/ADM extension and do not regard the assembled four-metric as nonsingular;
+ \item do not evaluate the physical metric at the puncture $r=0$.
+\end{itemize}
+
+The accompanying script \texttt{kerr\_quasi\_isotropic\_check.py} verifies the radial identities, double covering, subextremal horizon extension, puncture scaling, cancellation-free form of $A$, axis regularization, the spatial and four-metric determinants, all Cartesian four-metric components, and both fully substituted Cartesian ADM identities. Run it from this directory with
+\begin{verbatim}
+python3 kerr_quasi_isotropic_check.py
+\end{verbatim}
+
+\begin{thebibliography}{9}
+\bibitem{Assumpcao2024}
+T.~Assumpcao,
+\emph{A Hyperbolic Relaxation Solver for Numerical Relativity},
+Ph.D. dissertation, West Virginia University (2024), Sec.~5.1,
+\href{https://researchrepository.wvu.edu/etd/12636}{WVU ETD 12636}.
+
+\bibitem{Liu2009}
+Y.~T. Liu, Z.~B. Etienne, and S.~L. Shapiro,
+``Evolution of near-extremal-spin black holes using the moving puncture technique,''
+Phys. Rev. D \textbf{80}, 121503 (2009),
+\href{https://arxiv.org/abs/1001.4077}{arXiv:1001.4077}.
+
+\bibitem{GaratPrice2000}
+A.~Garat and R.~H. Price,
+``Nonexistence of conformally flat slices of the Kerr spacetime,''
+Phys. Rev. D \textbf{61}, 124011 (2000),
+\href{https://arxiv.org/abs/gr-qc/0002013}{arXiv:gr-qc/0002013}.
+
+\bibitem{ValienteKroon2004}
+J.~A. Valiente Kroon,
+``On the nonexistence of conformally flat slices in the Kerr and other stationary spacetimes,''
+Phys. Rev. Lett. \textbf{92}, 041101 (2004),
+\href{https://arxiv.org/abs/gr-qc/0310048}{arXiv:gr-qc/0310048}.
+\end{thebibliography}
+
+\end{document}
