@@ -18,6 +18,9 @@ interpolated at that point.
   the generated formula appendix.
 - [`kerr_notes/`](kerr_notes/) contains checked, axis-regular formulas for the
   subextremal Kerr metric in modified quasi-isotropic Cartesian coordinates.
+- [`kerr_interpolation/`](kerr_interpolation/) contains a generated analytic
+  Kerr evaluator and a C convergence experiment for metric values and
+  Cartesian gradients.
 - [`references/`](references/) contains the source material used when deriving
   and checking the mathematics.
 - [`mathematica_notebooks/`](mathematica_notebooks/) contains earlier symbolic
@@ -116,6 +119,29 @@ The independent Kerr notes and their symbolic checks can be built with:
 ```sh
 make -C kerr_notes check
 ```
+
+## Run the Kerr convergence experiment
+
+The Kerr experiment initializes all ten independent four-metric components on
+cell-centered grids and interpolates them together at one unfiltered random
+point cloud. Build it and select the resolutions and point count at run time:
+
+```sh
+make -C kerr_interpolation
+make -C kerr_interpolation run \
+    ARGS='--resolutions 32,48,64,96 --points 10000'
+```
+
+Run its generated-expression, exact-evaluator, library, symbolic, and
+end-to-end checks with:
+
+```sh
+make -C kerr_interpolation check
+```
+
+See the [experiment README](kerr_interpolation/README.md) for its exact metric
+API, cell-centered ghost grid, deterministic random cloud, and interpretation
+of the sampled error norms near the Kerr puncture.
 
 ## Numerical scope
 

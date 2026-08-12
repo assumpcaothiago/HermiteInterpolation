@@ -18,6 +18,7 @@ __pycache__/
 
 # Standalone C library build products
 /hermite3d/build/
+/kerr_interpolation/build/
 
 # Editor and operating-system files
 /.vscode/
