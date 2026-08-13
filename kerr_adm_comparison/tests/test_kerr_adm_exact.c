@@ -156,7 +156,6 @@ static void test_errors_and_names(void) {
   double values[KERR_ADM_FIELD_COUNT];
   double original_values[KERR_ADM_FIELD_COUNT];
   kerr_adm_value_gradient results[KERR_ADM_FIELD_COUNT];
-  kerr_adm_value_gradient original_results[KERR_ADM_FIELD_COUNT];
   const double throat = kerr_adm_exact_throat_radius();
 
   for (size_t field = 0; field < KERR_ADM_FIELD_COUNT; ++field) {
@@ -168,7 +167,6 @@ static void test_errors_and_names(void) {
     check(kerr_adm_field_name((kerr_adm_field)field) != NULL, "field name");
   }
   memcpy(original_values, values, sizeof(values));
-  memcpy(original_results, results, sizeof(results));
   check(kerr_adm_field_name((kerr_adm_field)-1) == NULL, "negative field name");
   check(kerr_adm_field_name((kerr_adm_field)KERR_ADM_FIELD_COUNT) == NULL,
         "large field name");
@@ -193,10 +191,35 @@ static void test_errors_and_names(void) {
         "throat value accepted");
   check(values[KERR_ADM_ALPHA] == 0.0, "throat lapse is zero");
   check(kerr_adm_exact_value_gradient(throat, 0.0, 0.0, results) ==
-            KERR_ADM_EXACT_NONDIFFERENTIABLE,
-        "throat gradient rejected");
-  check(memcmp(results, original_results, sizeof(results)) == 0,
-        "gradient output unchanged at throat");
+            KERR_ADM_EXACT_SUCCESS,
+        "signed lapse gradient accepted at throat");
+  check(isfinite(results[KERR_ADM_ALPHA].gradient[0]) &&
+            results[KERR_ADM_ALPHA].gradient[0] > 0.0,
+        "signed lapse has a finite outward throat derivative");
+  check(results[KERR_ADM_ALPHA].gradient[1] == 0.0 &&
+            results[KERR_ADM_ALPHA].gradient[2] == 0.0,
+        "axis throat lapse gradient is radial");
+
+  {
+    const double step = 1.0e-5 * throat;
+    double inner[KERR_ADM_FIELD_COUNT];
+    double outer[KERR_ADM_FIELD_COUNT];
+    double centered_derivative;
+
+    check(kerr_adm_exact_values(throat - step, 0.0, 0.0, inner) ==
+              KERR_ADM_EXACT_SUCCESS,
+          "inner-sheet lapse value accepted");
+    check(kerr_adm_exact_values(throat + step, 0.0, 0.0, outer) ==
+              KERR_ADM_EXACT_SUCCESS,
+          "exterior-sheet lapse value accepted");
+    check(inner[KERR_ADM_ALPHA] < 0.0 && outer[KERR_ADM_ALPHA] > 0.0,
+          "signed lapse changes sign at the throat");
+    centered_derivative =
+        (outer[KERR_ADM_ALPHA] - inner[KERR_ADM_ALPHA]) / (2.0 * step);
+    check(close_scaled(centered_derivative,
+                       results[KERR_ADM_ALPHA].gradient[0], 2.0e-10),
+          "analytic throat lapse gradient matches a centered difference");
+  }
 }
 
 int main(void) {

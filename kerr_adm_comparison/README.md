@@ -109,11 +109,19 @@ The storage remains substantial at high resolution: `N=800` requires about
 39.9 GiB for the ten field arrays alone. OpenMP accelerates their population
 but does not reduce this memory requirement.
 
-The lapse is the nonnegative LES lapse on both sheets. It is continuous but
-not differentiable at `r=s`. Centers are never filtered merely because an
-interpolation or finite-difference stencil enters the inner sheet; the program
-reports how many do. Such stencils can exhibit reduced or erratic convergence,
-which is a property of the sampled lapse rather than a hidden test failure.
+The lapse uses the smooth signed convention
+
+```text
+alpha = (r - s) sqrt(Q Sigma / (r A)).
+```
+
+It is positive on the exterior sheet, negative on the inner sheet, zero at the
+throat, and differentiable through `r=s`. Its square, and therefore the
+reconstructed four-metric, is identical to the nonnegative lapse convention.
+Centers are never filtered merely because an interpolation or finite-difference
+stencil enters the inner sheet; the program reports how many do. Those
+throat-crossing stencils now sample a smooth lapse rather than an artificial
+absolute-value cusp.
 
 ## Errors and timing
 

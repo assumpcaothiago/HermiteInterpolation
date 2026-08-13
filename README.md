@@ -129,7 +129,9 @@ The ADM comparison samples the lapse, contravariant shift, and six independent
 spatial-metric components on the same cell-centered Kerr grids. Hermite returns
 values and gradients in one call; Lagrange supplies values at the center and at
 twelve displaced points used by a fourth-order centered difference with step
-equal to the grid spacing.
+equal to the grid spacing. The comparison uses the signed LES lapse, which is
+smooth through the throat and reconstructs the same four-metric as the
+nonnegative convention.
 
 ```sh
 make -C kerr_adm_comparison check

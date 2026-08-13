@@ -175,8 +175,6 @@ static const char *exact_status_name(kerr_adm_exact_status status) {
       return "invalid argument";
     case KERR_ADM_EXACT_DOMAIN_ERROR:
       return "coordinate-domain error";
-    case KERR_ADM_EXACT_NONDIFFERENTIABLE:
-      return "nondifferentiable throat";
     case KERR_ADM_EXACT_NONFINITE_RESULT:
       return "nonfinite result";
   }
@@ -1025,7 +1023,7 @@ static void print_results(const options *arguments, const level_summary *levels,
          ", expected relative perturbation RMS = %.17g\n",
          arguments->noise_seed, arguments->noise_epsilon / sqrt(3.0));
   printf("  each resolution uses a deterministic independent noise realization\n");
-  printf("  lapse convention = nonnegative LES lapse on both sheets\n");
+  printf("  lapse convention = signed smooth LES lapse across the throat\n");
   printf("  Lagrange FD spacing equals the local grid spacing H\n");
 
   printf("\nGrid diagnostics\n");
@@ -1056,8 +1054,8 @@ static void print_results(const options *arguments, const level_summary *levels,
 
   printf("\nErrors are finite-cloud sampled absolute and scale-normalized norms.\n");
   printf("Smooth-region expectations: Hermite value p=5, Hermite gradient p=4,\n");
-  printf("Lagrange value p=7, and Lagrange+FD gradient p=4.  The lapse cusp\n");
-  printf("can disrupt these rates when a stencil crosses r=s; no threshold is enforced.\n");
+  printf("Lagrange value p=7, and Lagrange+FD gradient p=4.  The signed lapse\n");
+  printf("is smooth through r=s, so throat-crossing stencils remain regular.\n");
   if (arguments->noise_epsilon > 0.0) {
     printf("With fixed white grid noise, values can approach an O(epsilon) floor,\n");
     printf("while derivative noise can grow as O(epsilon/H); zero or negative\n");

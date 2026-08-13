@@ -30,7 +30,6 @@ typedef enum kerr_adm_exact_status {
   KERR_ADM_EXACT_SUCCESS = 0,
   KERR_ADM_EXACT_INVALID_ARGUMENT,
   KERR_ADM_EXACT_DOMAIN_ERROR,
-  KERR_ADM_EXACT_NONDIFFERENTIABLE,
   KERR_ADM_EXACT_NONFINITE_RESULT
 } kerr_adm_exact_status;
 
@@ -40,18 +39,18 @@ typedef struct kerr_adm_value_gradient {
 } kerr_adm_value_gradient;
 
 /*
- * Evaluate the Cartesian ADM fields for M=1 and a=1/2.  The lapse is the
- * nonnegative LES lapse on both sheets.  The origin is outside the coordinate
- * domain.  On failure, the output array is left unchanged.
+ * Evaluate the Cartesian ADM fields for M=1 and a=1/2.  The lapse is signed:
+ * positive on the exterior sheet, negative on the inner sheet, and smooth
+ * through the throat.  The origin is outside the coordinate domain.  On
+ * failure, the output array is left unchanged.
  */
 kerr_adm_exact_status kerr_adm_exact_values(
     double x, double y, double z,
     double values[KERR_ADM_FIELD_COUNT]);
 
 /*
- * Evaluate the fields and their analytic Cartesian gradients.  The
- * nonnegative lapse is not differentiable at the throat r=s, so this routine
- * rejects that surface.  On failure, results is left unchanged.
+ * Evaluate the fields and their analytic Cartesian gradients, including on
+ * the throat r=s.  On failure, results is left unchanged.
  */
 kerr_adm_exact_status kerr_adm_exact_value_gradient(
     double x, double y, double z,

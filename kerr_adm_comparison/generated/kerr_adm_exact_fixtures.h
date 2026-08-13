@@ -33,9 +33,9 @@ static const kerr_adm_exact_fixture kerr_adm_exact_fixtures[] = {
     "inner",
     {0x1.999999999999ap-4, -0x1.2492492492492p-3, 0x1.999999999999ap-3},
     1,
-    {0x1.04e22f0c31026p-2, -0x1.fa1c492c74d76p-7, -0x1.6247000584fd2p-7, 0x0.0p+0, 0x1.f40b57a7bc3bdp+5, 0x1.17c2086253ea0p-1, 0x1.35974c8614879p+0, 0x1.f0dc0c3ed8315p+5, -0x1.ba45db08af9d2p+0, 0x1.f2708b4f0f672p+5},
+    {-0x1.04e22f0c31026p-2, -0x1.fa1c492c74d76p-7, -0x1.6247000584fd2p-7, 0x0.0p+0, 0x1.f40b57a7bc3bdp+5, 0x1.17c2086253ea0p-1, 0x1.35974c8614879p+0, 0x1.f0dc0c3ed8315p+5, -0x1.ba45db08af9d2p+0, 0x1.f2708b4f0f672p+5},
     {
-      {-0x1.43d00a4402392p-1, 0x1.ce96ea18032d1p-1, -0x1.398a82ca553a1p+0},
+      {0x1.43d00a4402392p-1, -0x1.ce96ea18032d1p-1, 0x1.398a82ca553a1p+0},
       {-0x1.115de230fb4a6p-6, 0x1.0e3d23d556d93p-3, -0x1.0e99b36176b33p-5},
       {-0x1.eaaf946912364p-4, 0x1.115de230fb4a6p-6, -0x1.7ad72e553fc7ap-6},
       {0x0.0p+0, 0x0.0p+0, 0x0.0p+0},
@@ -86,19 +86,19 @@ static const kerr_adm_exact_fixture kerr_adm_exact_fixtures[] = {
   {
     "throat",
     {0x1.ddb3d742c2655p-2, 0x0.0p+0, 0x0.0p+0},
-    0,
+    1,
     {0x0.0p+0, 0x0.0p+0, -0x1.0000000000000p-4, 0x0.0p+0, 0x1.13cd3a2c8198ep+4, 0x0.0p+0, 0x0.0p+0, 0x1.26145e9ecd563p+4, 0x0.0p+0, 0x1.0000000000000p+4},
     {
+      {0x1.ed47188fc0474p-1, 0x0.0p+0, 0x0.0p+0},
+      {0x0.0p+0, 0x1.126145e9ecd56p-3, 0x0.0p+0},
+      {-0x1.126145e9ecd56p-3, 0x0.0p+0, 0x0.0p+0},
       {0x0.0p+0, 0x0.0p+0, 0x0.0p+0},
+      {-0x1.279a74590331cp+6, 0x0.0p+0, 0x0.0p+0},
+      {0x0.0p+0, -0x1.39716f504db1dp+1, 0x0.0p+0},
+      {0x0.0p+0, 0x0.0p+0, 0x1.5392e6f165c62p+1},
+      {-0x1.3b318b4e080cep+6, 0x0.0p+0, 0x0.0p+0},
       {0x0.0p+0, 0x0.0p+0, 0x0.0p+0},
-      {0x0.0p+0, 0x0.0p+0, 0x0.0p+0},
-      {0x0.0p+0, 0x0.0p+0, 0x0.0p+0},
-      {0x0.0p+0, 0x0.0p+0, 0x0.0p+0},
-      {0x0.0p+0, 0x0.0p+0, 0x0.0p+0},
-      {0x0.0p+0, 0x0.0p+0, 0x0.0p+0},
-      {0x0.0p+0, 0x0.0p+0, 0x0.0p+0},
-      {0x0.0p+0, 0x0.0p+0, 0x0.0p+0},
-      {0x0.0p+0, 0x0.0p+0, 0x0.0p+0}
+      {-0x1.126145e9ecd56p+6, 0x0.0p+0, 0x0.0p+0}
     }
   },
   {
@@ -123,9 +123,9 @@ static const kerr_adm_exact_fixture kerr_adm_exact_fixtures[] = {
     "throat_inside",
     {0x1.3e77d0efadf62p-2, -0x1.3e77d0efadf62p-3, 0x1.3e77d0efadf62p-2},
     1,
-    {0x1.d385185f3bcc2p-22, -0x1.55553fffff19ap-6, -0x1.55553fffff19ap-5, 0x0.0p+0, 0x1.156a131fb9eadp+4, 0x1.e49ae82f2576dp-3, 0x1.229c5e2bd8fdcp-1, 0x1.1b17e3d8475b4p+4, -0x1.229c5e2bd8fdcp-2, 0x1.11403f7b33136p+4},
+    {-0x1.d385185f3bcc2p-22, -0x1.55553fffff19ap-6, -0x1.55553fffff19ap-5, 0x0.0p+0, 0x1.156a131fb9eadp+4, 0x1.e49ae82f2576dp-3, 0x1.229c5e2bd8fdcp-1, 0x1.1b17e3d8475b4p+4, -0x1.229c5e2bd8fdcp-2, 0x1.11403f7b33136p+4},
     {
-      {-0x1.4e0ec68c92609p-1, 0x1.4e0ec68c92609p-2, -0x1.4e0ec518b0a3fp-1},
+      {0x1.4e0ec68c92609p-1, -0x1.4e0ec68c92609p-2, 0x1.4e0ec518b0a3fp-1},
       {-0x1.493bff4202d03p-25, 0x1.1261487c641abp-3, -0x1.493bfed0d1d17p-25},
       {-0x1.12615033cc164p-3, 0x1.493bff4202d03p-25, -0x1.493bfed0d1d17p-24},
       {0x0.0p+0, 0x0.0p+0, 0x0.0p+0},
