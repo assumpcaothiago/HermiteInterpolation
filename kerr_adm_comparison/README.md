@@ -41,6 +41,39 @@ make -C kerr_adm_comparison run \
     ARGS='--resolutions 64,96 --points 20000 --seed 0x12345678'
 ```
 
+### Optional grid noise
+
+Use `--noise-epsilon` to multiply every stored ADM field sample by an
+independent relative perturbation:
+
+```text
+F_noisy = F_exact (1 + epsilon eta),  eta uniform on (-1,1).
+```
+
+For example:
+
+```sh
+OMP_NUM_THREADS=8 make -C kerr_adm_comparison run \
+    ARGS='--resolutions 200,400 --points 10000 --noise-epsilon 1e-8'
+```
+
+The amplitude defaults to zero. The independent noise seed defaults to
+`0x4e4f49534541444d` and can be selected without changing the random query
+cloud:
+
+```sh
+make -C kerr_adm_comparison run \
+    ARGS='--resolutions 200,400 --points 10000 --noise-epsilon 1e-8 --noise-seed 0x1234'
+```
+
+Noise is independently keyed by its seed, resolution, field, and logical grid
+indices. It is reproducible across OpenMP thread counts, while different
+resolutions receive distinct white-noise realizations. Both interpolators read
+the same perturbed arrays. Analytic query values, analytic derivatives, and the
+`ANALYTIC-FD` baseline remain noise-free. Multiplicative noise preserves exact
+zeros such as `betaz`; it is not a constraint-preserving perturbation of the
+ADM data.
+
 Grid population uses OpenMP. The interpolation loops are intentionally serial
 because their reported wall times estimate latency for obtaining all ten ADM
 values and gradients at one point. Control grid initialization with the
@@ -109,6 +142,13 @@ value-and-gradient call, one center-only Lagrange value call, and the complete
 13-call Lagrange value-plus-FD-gradient path. Expected smooth-region orders are
 five for Hermite values, seven for Lagrange values, and four for both gradient
 paths.
+
+With fixed white noise, refinement eventually stops following these smooth
+orders. Value errors generally approach an `O(epsilon)` floor. Derivative
+weights scale like `1/H`, so their noise contribution can grow as
+`O(epsilon/H)` and produce negative measured orders. Clean and noisy cases are
+separate invocations; use identical resolutions, point counts, and query seeds
+when comparing them.
 
 ## Generated and copied sources
 

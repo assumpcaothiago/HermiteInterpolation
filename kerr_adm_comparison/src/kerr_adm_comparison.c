@@ -1,5 +1,6 @@
 #include "hermite3d.h"
 #include "kerr_adm_exact.h"
+#include "kerr_adm_noise.h"
 #include "lagrange3d_reference.h"
 
 #include <errno.h>
@@ -25,12 +26,15 @@ typedef enum comparison_method {
 } comparison_method;
 
 static const uint64_t DEFAULT_SEED = UINT64_C(0x4b4552524845524d);
+static const uint64_t DEFAULT_NOISE_SEED = UINT64_C(0x4e4f49534541444d);
 
 typedef struct options {
   size_t *resolutions;
   size_t resolution_count;
   size_t point_count;
   uint64_t seed;
+  double noise_epsilon;
+  uint64_t noise_seed;
 } options;
 
 typedef struct query_point {
@@ -211,10 +215,16 @@ static const char *quantity_name(size_t quantity) {
 
 static void print_usage(FILE *stream, const char *program) {
   fprintf(stream,
-          "Usage: %s --resolutions N1,N2,... --points COUNT [--seed UINT64]\n"
+          "Usage: %s --resolutions N1,N2,... --points COUNT [options]\n"
           "\n"
           "N values must be positive, even, distinct, and strictly increasing.\n"
-          "UINT64 accepts decimal or a 0x-prefixed hexadecimal value.\n",
+          "UINT64 accepts decimal or a 0x-prefixed hexadecimal value.\n"
+          "\n"
+          "Options:\n"
+          "  --seed UINT64          random-query seed\n"
+          "  --noise-epsilon EPS    relative grid-noise amplitude in [0,1]\n"
+          "                         (default 0: exact grid samples)\n"
+          "  --noise-seed UINT64    independent grid-noise seed\n",
           program);
 }
 
@@ -243,6 +253,21 @@ static int parse_seed(const char *text, uint64_t *value) {
   if (errno != 0 || end == text || *end != '\0' || parsed > UINT64_MAX)
     return 0;
   *value = (uint64_t)parsed;
+  return 1;
+}
+
+static int parse_noise_epsilon(const char *text, double *value) {
+  char *end = NULL;
+  double parsed;
+
+  if (text == NULL || *text == '\0') return 0;
+  errno = 0;
+  parsed = strtod(text, &end);
+  if (errno != 0 || end == text || *end != '\0' || !isfinite(parsed) ||
+      parsed < 0.0 || parsed > 1.0) {
+    return 0;
+  }
+  *value = parsed;
   return 1;
 }
 
@@ -299,11 +324,15 @@ static int parse_options(int argc, char **argv, options *result) {
   const char *resolution_text = NULL;
   const char *point_text = NULL;
   const char *seed_text = NULL;
+  const char *noise_epsilon_text = NULL;
+  const char *noise_seed_text = NULL;
 
   result->resolutions = NULL;
   result->resolution_count = 0;
   result->point_count = 0;
   result->seed = DEFAULT_SEED;
+  result->noise_epsilon = 0.0;
+  result->noise_seed = DEFAULT_NOISE_SEED;
   for (int argument = 1; argument < argc; ++argument) {
     const char *value;
     if (strcmp(argv[argument], "--help") == 0 ||
@@ -341,13 +370,37 @@ static int parse_options(int argc, char **argv, options *result) {
       seed_text = value;
       continue;
     }
+    value = attached_value(argv[argument], "--noise-epsilon");
+    if (strcmp(argv[argument], "--noise-epsilon") == 0) {
+      if (++argument >= argc) return 0;
+      value = argv[argument];
+    }
+    if (value != NULL) {
+      if (noise_epsilon_text != NULL) return 0;
+      noise_epsilon_text = value;
+      continue;
+    }
+    value = attached_value(argv[argument], "--noise-seed");
+    if (strcmp(argv[argument], "--noise-seed") == 0) {
+      if (++argument >= argc) return 0;
+      value = argv[argument];
+    }
+    if (value != NULL) {
+      if (noise_seed_text != NULL) return 0;
+      noise_seed_text = value;
+      continue;
+    }
     return 0;
   }
   if (resolution_text == NULL || point_text == NULL ||
       !parse_resolutions(resolution_text, &result->resolutions,
                          &result->resolution_count) ||
       !parse_size(point_text, &result->point_count) ||
-      (seed_text != NULL && !parse_seed(seed_text, &result->seed))) {
+      (seed_text != NULL && !parse_seed(seed_text, &result->seed)) ||
+      (noise_epsilon_text != NULL &&
+       !parse_noise_epsilon(noise_epsilon_text, &result->noise_epsilon)) ||
+      (noise_seed_text != NULL &&
+       !parse_seed(noise_seed_text, &result->noise_seed))) {
     free(result->resolutions);
     result->resolutions = NULL;
     return 0;
@@ -435,7 +488,9 @@ static void free_coordinates(double *coordinate[3]) {
 }
 
 static int fill_grid(double *storage, size_t dimension, size_t grid_points,
-                     double *coordinate[3], int *team_size) {
+                     double *coordinate[3], size_t resolution,
+                     double noise_epsilon, uint64_t noise_seed,
+                     int *team_size) {
   const int max_threads = omp_get_max_threads();
   grid_failure *failures;
   const grid_failure *first_failure = NULL;
@@ -451,7 +506,8 @@ static int fill_grid(double *storage, size_t dimension, size_t grid_points,
   }
   *team_size = 1;
 #pragma omp parallel default(none)                                                \
-    shared(storage, dimension, grid_points, coordinate, failures, team_size)
+    shared(storage, dimension, grid_points, coordinate, resolution,             \
+           noise_epsilon, noise_seed, failures, team_size)
   {
     const int thread = omp_get_thread_num();
 #pragma omp single
@@ -473,8 +529,19 @@ static int fill_grid(double *storage, size_t dimension, size_t grid_points,
             }
             continue;
           }
-          for (size_t field = 0; field < KERR_ADM_FIELD_COUNT; ++field)
-            storage[field * grid_points + offset] = values[field];
+          for (size_t field = 0; field < KERR_ADM_FIELD_COUNT; ++field) {
+            const double noisy_value = kerr_adm_apply_noise(
+                values[field], noise_epsilon, noise_seed, resolution, field,
+                index0, index1, index2);
+            if (!isfinite(noisy_value)) {
+              if (offset < failures[thread].index) {
+                failures[thread].index = offset;
+                failures[thread].status = KERR_ADM_EXACT_NONFINITE_RESULT;
+              }
+              continue;
+            }
+            storage[field * grid_points + offset] = noisy_value;
+          }
         }
       }
     }
@@ -819,7 +886,8 @@ static int evaluate_level(const options *arguments, const query_point *points,
     free(storage);
     return 0;
   }
-  if (!fill_grid(storage, dimension, grid_points, coordinate,
+  if (!fill_grid(storage, dimension, grid_points, coordinate, resolution,
+                 arguments->noise_epsilon, arguments->noise_seed,
                  &summary->grid_threads)) {
     free_coordinates(coordinate);
     free(storage);
@@ -951,6 +1019,12 @@ static void print_results(const options *arguments, const level_summary *levels,
          -half_width, half_width);
   printf("  random exterior centers = %zu, seed = 0x%016" PRIx64 "\n",
          arguments->point_count, arguments->seed);
+  printf("  grid noise = independent multiplicative U(-1,1), epsilon = %.17g\n",
+         arguments->noise_epsilon);
+  printf("  noise seed = 0x%016" PRIx64
+         ", expected relative perturbation RMS = %.17g\n",
+         arguments->noise_seed, arguments->noise_epsilon / sqrt(3.0));
+  printf("  each resolution uses a deterministic independent noise realization\n");
   printf("  lapse convention = nonnegative LES lapse on both sheets\n");
   printf("  Lagrange FD spacing equals the local grid spacing H\n");
 
@@ -984,6 +1058,11 @@ static void print_results(const options *arguments, const level_summary *levels,
   printf("Smooth-region expectations: Hermite value p=5, Hermite gradient p=4,\n");
   printf("Lagrange value p=7, and Lagrange+FD gradient p=4.  The lapse cusp\n");
   printf("can disrupt these rates when a stencil crosses r=s; no threshold is enforced.\n");
+  if (arguments->noise_epsilon > 0.0) {
+    printf("With fixed white grid noise, values can approach an O(epsilon) floor,\n");
+    printf("while derivative noise can grow as O(epsilon/H); zero or negative\n");
+    printf("measured orders are therefore meaningful noisy-data behavior.\n");
+  }
 
   for (size_t quantity = 0; quantity < QUANTITY_COUNT; ++quantity) {
     for (size_t method = 0; method < METHOD_COUNT; ++method) {

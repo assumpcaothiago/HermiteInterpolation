@@ -141,6 +141,14 @@ See the [ADM comparison README](kerr_adm_comparison/README.md) for field order,
 analytic padding, error definitions, timing boundaries, and copied-source
 provenance.
 
+To compare sensitivity to deterministic multiplicative grid noise while
+retaining clean analytic references:
+
+```sh
+OMP_NUM_THREADS=8 make -C kerr_adm_comparison run \
+    ARGS='--resolutions 200,400 --points 10000 --noise-epsilon 1e-8'
+```
+
 ## Run the Kerr convergence experiment
 
 The Kerr experiment initializes all ten independent four-metric components on

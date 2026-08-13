@@ -14,6 +14,7 @@ BUILD_DIR := build
 PROGRAM := $(BUILD_DIR)/kerr_adm_comparison
 EXACT_TEST := $(BUILD_DIR)/test_kerr_adm_exact
 LAGRANGE_TEST := $(BUILD_DIR)/test_lagrange_reference
+NOISE_TEST := $(BUILD_DIR)/test_kerr_adm_noise
 HERMITE_LIBRARY := ../hermite3d/build/libhermite3d.a
 
 GENERATOR := generate_kerr_adm_exact.py
@@ -57,7 +58,8 @@ $(VENDOR_OBJECT): $(VENDOR_DIR)/interpolation_3d_general__uniform_src_grid.c \
 	$(CC) -I$(VENDOR_DIR) $(CFLAGS) $(VENDOR_CFLAGS) $(OPENMP_CFLAGS) \
 		-c $< -o $@
 
-$(MAIN_OBJECT): src/kerr_adm_comparison.c include/kerr_adm_exact.h \
+$(MAIN_OBJECT): src/kerr_adm_comparison.c src/kerr_adm_noise.h \
+                include/kerr_adm_exact.h \
                 include/lagrange3d_reference.h \
                 ../hermite3d/include/hermite3d.h | $(BUILD_DIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT_CFLAGS) $(OPENMP_CFLAGS) -c $< -o $@
@@ -78,6 +80,9 @@ $(LAGRANGE_TEST): tests/test_lagrange_reference.c $(ADAPTER_OBJECT) \
 		tests/test_lagrange_reference.c -o $(BUILD_DIR)/test_lagrange_reference.o
 	$(CC) $(CFLAGS) $(BUILD_DIR)/test_lagrange_reference.o $(ADAPTER_OBJECT) \
 		$(VENDOR_OBJECT) $(OPENMP_LDFLAGS) -lm -o $@
+
+$(NOISE_TEST): tests/test_kerr_adm_noise.c src/kerr_adm_noise.h | $(BUILD_DIR)
+	$(CC) -Isrc $(CFLAGS) $(STRICT_CFLAGS) $< -lm -o $@
 
 run: $(PROGRAM)
 	$(PROGRAM) $(ARGS)
@@ -100,11 +105,13 @@ check-upstream:
 	cmp $(VENDOR_DIR)/intrinsics/simd_intrinsics.h \
 		$(BHAH_REFERENCE)/intrinsics/simd_intrinsics.h
 
-check: check-generated check-vendor $(EXACT_TEST) $(LAGRANGE_TEST) $(PROGRAM)
+check: check-generated check-vendor $(EXACT_TEST) $(LAGRANGE_TEST) \
+       $(NOISE_TEST) $(PROGRAM)
 	$(MAKE) -C ../hermite3d check
 	$(MAKE) -C ../kerr_notes check
 	$(EXACT_TEST)
 	$(LAGRANGE_TEST)
+	$(NOISE_TEST)
 	OMP_NUM_THREADS=2 OMP_DYNAMIC=FALSE $(PROGRAM) \
 		--resolutions 8,12 --points 64 --seed 0x4b4552524845524d \
 		> $(BUILD_DIR)/smoke-output.txt
@@ -119,6 +126,35 @@ check: check-generated check-vendor $(EXACT_TEST) $(LAGRANGE_TEST) $(PROGRAM)
 		END { if (!found) exit 1 }' $(BUILD_DIR)/smoke-output.txt
 	@awk 'NF == 5 && ($$1 == 8 || $$1 == 12) { if ($$2 <= 0 || $$3 <= 0 || $$4 <= 0 || $$5 <= 0) exit 1; found = 1 } \
 		END { if (!found) exit 1 }' $(BUILD_DIR)/smoke-output.txt
+	OMP_NUM_THREADS=1 OMP_DYNAMIC=FALSE $(PROGRAM) \
+		--resolutions 8,12 --points 32 \
+		> $(BUILD_DIR)/clean-default.txt
+	OMP_NUM_THREADS=1 OMP_DYNAMIC=FALSE $(PROGRAM) \
+		--resolutions 8,12 --points 32 --noise-epsilon 0 \
+		> $(BUILD_DIR)/clean-explicit-zero.txt
+	$(PYTHON) tests/compare_noise_runs.py \
+		$(BUILD_DIR)/clean-default.txt $(BUILD_DIR)/clean-explicit-zero.txt \
+		--errors equal
+	OMP_NUM_THREADS=1 OMP_DYNAMIC=FALSE $(PROGRAM) \
+		--resolutions 8,12 --points 32 --noise-epsilon 1e-8 \
+		--noise-seed 0x4e4f49534541444d > $(BUILD_DIR)/noisy-one-thread.txt
+	OMP_NUM_THREADS=2 OMP_DYNAMIC=FALSE $(PROGRAM) \
+		--resolutions 8,12 --points 32 --noise-epsilon 1e-8 \
+		--noise-seed 0x4e4f49534541444d > $(BUILD_DIR)/noisy-two-threads.txt
+	$(PYTHON) tests/compare_noise_runs.py \
+		$(BUILD_DIR)/noisy-one-thread.txt $(BUILD_DIR)/noisy-two-threads.txt \
+		--errors equal
+	OMP_NUM_THREADS=1 OMP_DYNAMIC=FALSE $(PROGRAM) \
+		--resolutions 8,12 --points 32 --noise-epsilon 1e-8 \
+		--noise-seed 0x12345678 > $(BUILD_DIR)/noisy-other-seed.txt
+	$(PYTHON) tests/compare_noise_runs.py \
+		$(BUILD_DIR)/noisy-one-thread.txt $(BUILD_DIR)/noisy-other-seed.txt \
+		--errors different
+	@! $(PROGRAM) --resolutions 8 --points 1 --noise-epsilon=-1 >/dev/null 2>&1
+	@! $(PROGRAM) --resolutions 8 --points 1 --noise-epsilon=1.01 >/dev/null 2>&1
+	@! $(PROGRAM) --resolutions 8 --points 1 --noise-epsilon=nan >/dev/null 2>&1
+	@! $(PROGRAM) --resolutions 8 --points 1 --noise-epsilon=inf >/dev/null 2>&1
+	@! $(PROGRAM) --resolutions 8 --points 1 --noise-epsilon=garbage >/dev/null 2>&1
 
 clean:
 	$(RM) -r $(BUILD_DIR) __pycache__
@@ -127,6 +163,7 @@ help:
 	@echo "make                 build the ADM comparison executable"
 	@echo "make run ARGS='--resolutions 32,48,64 --points 10000'"
 	@echo "OMP_NUM_THREADS=8 make run ARGS='--resolutions 64 --points 10000'"
+	@echo "make run ARGS='--resolutions 64 --points 10000 --noise-epsilon 1e-8'"
 	@echo "make regen           regenerate committed ADM expressions and fixtures"
 	@echo "make check-generated verify generated files are current"
 	@echo "make check-vendor    verify copied Lagrange file checksums"
