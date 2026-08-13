@@ -21,6 +21,9 @@ interpolated at that point.
 - [`kerr_interpolation/`](kerr_interpolation/) contains a generated analytic
   Kerr evaluator and a C convergence experiment for metric values and
   Cartesian gradients.
+- [`kerr_adm_comparison/`](kerr_adm_comparison/) compares Hermite ADM values
+  and direct gradients with the copied seven-point Lagrange interpolator and
+  fourth-order finite differences of its interpolated values.
 - [`references/`](references/) contains the source material used when deriving
   and checking the mathematics.
 - [`mathematica_notebooks/`](mathematica_notebooks/) contains earlier symbolic
@@ -119,6 +122,24 @@ The independent Kerr notes and their symbolic checks can be built with:
 ```sh
 make -C kerr_notes check
 ```
+
+## Compare Hermite and Lagrange ADM interpolation
+
+The ADM comparison samples the lapse, contravariant shift, and six independent
+spatial-metric components on the same cell-centered Kerr grids. Hermite returns
+values and gradients in one call; Lagrange supplies values at the center and at
+twelve displaced points used by a fourth-order centered difference with step
+equal to the grid spacing.
+
+```sh
+make -C kerr_adm_comparison check
+make -C kerr_adm_comparison run \
+    ARGS='--resolutions 32,48,64,96 --points 10000'
+```
+
+See the [ADM comparison README](kerr_adm_comparison/README.md) for field order,
+analytic padding, error definitions, timing boundaries, and copied-source
+provenance.
 
 ## Run the Kerr convergence experiment
 
