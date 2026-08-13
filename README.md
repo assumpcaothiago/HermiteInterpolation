@@ -132,6 +132,15 @@ make -C kerr_interpolation run \
     ARGS='--resolutions 32,48,64,96 --points 10000'
 ```
 
+An optional z-axis diagnostic overlays any metric component or first
+derivative with its analytical expression:
+
+```sh
+make -C kerr_interpolation plot \
+    PROFILE=xx:value \
+    ARGS='--resolutions 32,48,64,96 --points 10000'
+```
+
 Run its generated-expression, exact-evaluator, library, symbolic, and
 end-to-end checks with:
 

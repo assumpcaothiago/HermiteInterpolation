@@ -15,19 +15,26 @@ enum {
 };
 
 static const uint64_t DEFAULT_SEED = UINT64_C(0x4b4552524845524d);
+static const size_t DEFAULT_Z_PROFILE_SAMPLES = 1000;
+static const char DEFAULT_Z_PROFILE_OUTPUT[] = "build/z_profile.csv";
 
 typedef struct options {
   size_t *resolutions;
   size_t resolution_count;
   size_t point_count;
   uint64_t seed;
+  int z_profile_enabled;
+  size_t z_profile_component;
+  size_t z_profile_quantity;
+  size_t z_profile_samples;
+  const char *z_profile_output;
 } options;
 
 /*
  * The scaled representation scale*sqrt(sum_squares) is the same strategy
  * used by robust BLAS norm implementations.  It avoids forming error^2 when
- * a finite error near the Kerr puncture is large enough that its square would
- * overflow even though the requested norm is still representable.
+ * a finite interpolation error is large enough that its square would overflow
+ * even though the requested norm is still representable.
  */
 typedef struct scaled_sum_squares {
   long double scale;
@@ -150,11 +157,19 @@ static const char *hermite_status_name(hermite3d_status status) {
 
 static void print_usage(FILE *stream, const char *program) {
   fprintf(stream,
-          "Usage: %s --resolutions N1,N2,... --points COUNT [--seed UINT64]\n"
+          "Usage: %s --resolutions N1,N2,... --points COUNT [options]\n"
           "\n"
           "N values must be positive, even, distinct, and strictly increasing.\n"
           "One resolution reports errors; later resolutions also report pairwise\n"
-          "orders. UINT64 accepts decimal or a 0x-prefixed hexadecimal value.\n",
+          "orders. UINT64 accepts decimal or a 0x-prefixed hexadecimal value.\n"
+          "\n"
+          "Options:\n"
+          "  --seed UINT64              random seed\n"
+          "  --z-profile COMP:QUANTITY export a z-axis profile, where COMP is\n"
+          "                             tt,tx,ty,tz,xx,xy,xz,yy,yz,zz and\n"
+          "                             QUANTITY is value,dx,dy,dz\n"
+          "  --z-samples COUNT          even profile sample count (default 1000)\n"
+          "  --z-output PATH            profile CSV (default build/z_profile.csv)\n",
           program);
 }
 
@@ -240,15 +255,60 @@ static const char *attached_value(const char *argument, const char *name) {
   return NULL;
 }
 
+static const char *quantity_name(size_t quantity) {
+  static const char *const names[QUANTITY_COUNT] = {"value", "dx", "dy",
+                                                    "dz"};
+  return quantity < QUANTITY_COUNT ? names[quantity] : NULL;
+}
+
+static int parse_z_profile(const char *text, size_t *component,
+                           size_t *quantity) {
+  const char *separator;
+  size_t component_length;
+
+  if (text == NULL) return 0;
+  separator = strchr(text, ':');
+  if (separator == NULL || separator == text || separator[1] == '\0' ||
+      strchr(separator + 1, ':') != NULL) {
+    return 0;
+  }
+  component_length = (size_t)(separator - text);
+  for (size_t candidate = 0; candidate < KERR_EXACT_COMPONENT_COUNT;
+       ++candidate) {
+    const char *name =
+        kerr_exact_component_name((kerr_exact_component)candidate);
+    if (strlen(name) == component_length &&
+        strncmp(text, name, component_length) == 0) {
+      *component = candidate;
+      for (size_t entry = 0; entry < QUANTITY_COUNT; ++entry) {
+        if (strcmp(separator + 1, quantity_name(entry)) == 0) {
+          *quantity = entry;
+          return 1;
+        }
+      }
+      return 0;
+    }
+  }
+  return 0;
+}
+
 static int parse_options(int argc, char **argv, options *result) {
   const char *resolution_text = NULL;
   const char *point_text = NULL;
   const char *seed_text = NULL;
+  const char *z_profile_text = NULL;
+  const char *z_samples_text = NULL;
+  const char *z_output_text = NULL;
 
   result->resolutions = NULL;
   result->resolution_count = 0;
   result->point_count = 0;
   result->seed = DEFAULT_SEED;
+  result->z_profile_enabled = 0;
+  result->z_profile_component = 0;
+  result->z_profile_quantity = 0;
+  result->z_profile_samples = DEFAULT_Z_PROFILE_SAMPLES;
+  result->z_profile_output = DEFAULT_Z_PROFILE_OUTPUT;
 
   for (int argument = 1; argument < argc; ++argument) {
     const char *value;
@@ -290,6 +350,39 @@ static int parse_options(int argc, char **argv, options *result) {
       seed_text = value;
       continue;
     }
+
+    value = attached_value(argv[argument], "--z-profile");
+    if (strcmp(argv[argument], "--z-profile") == 0) {
+      if (++argument >= argc) return 0;
+      value = argv[argument];
+    }
+    if (value != NULL) {
+      if (z_profile_text != NULL) return 0;
+      z_profile_text = value;
+      continue;
+    }
+
+    value = attached_value(argv[argument], "--z-samples");
+    if (strcmp(argv[argument], "--z-samples") == 0) {
+      if (++argument >= argc) return 0;
+      value = argv[argument];
+    }
+    if (value != NULL) {
+      if (z_samples_text != NULL) return 0;
+      z_samples_text = value;
+      continue;
+    }
+
+    value = attached_value(argv[argument], "--z-output");
+    if (strcmp(argv[argument], "--z-output") == 0) {
+      if (++argument >= argc) return 0;
+      value = argv[argument];
+    }
+    if (value != NULL) {
+      if (z_output_text != NULL || *value == '\0') return 0;
+      z_output_text = value;
+      continue;
+    }
     return 0;
   }
 
@@ -301,6 +394,27 @@ static int parse_options(int argc, char **argv, options *result) {
     free(result->resolutions);
     result->resolutions = NULL;
     return 0;
+  }
+
+  if (z_profile_text == NULL) {
+    if (z_samples_text != NULL || z_output_text != NULL) {
+      free(result->resolutions);
+      result->resolutions = NULL;
+      return 0;
+    }
+  } else {
+    result->z_profile_enabled = 1;
+    if (!parse_z_profile(z_profile_text, &result->z_profile_component,
+                         &result->z_profile_quantity) ||
+        (z_samples_text != NULL &&
+         !parse_size(z_samples_text, &result->z_profile_samples)) ||
+        (result->z_profile_samples & (size_t)1) != 0 ||
+        (uintmax_t)result->z_profile_samples > UINT64_C(4503599627370496)) {
+      free(result->resolutions);
+      result->resolutions = NULL;
+      return 0;
+    }
+    if (z_output_text != NULL) result->z_profile_output = z_output_text;
   }
   return 2;
 }
@@ -352,8 +466,92 @@ static int fill_grid(double *storage, size_t dimension, size_t grid_points,
   return 1;
 }
 
+/*
+ * Export a diagnostic through the rotation axis without changing the random
+ * convergence sample.  Half of the midpoint samples lie on each exterior
+ * branch, z <= -s and z >= s.  No profile point lies in the lower LES sheet
+ * |z| < s, and the plotting script does not connect the separated branches.
+ */
+static int write_z_profile(
+    FILE *stream, const options *arguments, size_t resolution,
+    double half_width, double throat, const hermite3d_grid *grid,
+    const double *const functions[KERR_EXACT_COMPONENT_COUNT]) {
+  const char *component_name = kerr_exact_component_name(
+      (kerr_exact_component)arguments->z_profile_component);
+  const char *selected_quantity =
+      quantity_name(arguments->z_profile_quantity);
+  const size_t branch_samples = arguments->z_profile_samples / 2;
+  const long double branch_width =
+      (long double)half_width - (long double)throat;
+
+  for (size_t sample = 0; sample < arguments->z_profile_samples; ++sample) {
+    const int negative_branch = sample < branch_samples;
+    const size_t branch_index =
+        negative_branch ? sample : sample - branch_samples;
+    const long double fraction =
+        ((long double)branch_index + 0.5L) / (long double)branch_samples;
+    const double z = negative_branch
+                         ? (double)(-(long double)half_width +
+                                    branch_width * fraction)
+                         : (double)((long double)throat +
+                                    branch_width * fraction);
+    kerr_exact_value_gradient exact[KERR_EXACT_COMPONENT_COUNT];
+    hermite3d_value_gradient interpolated[KERR_EXACT_COMPONENT_COUNT];
+    double exact_value;
+    double interpolated_value;
+    long double error;
+    const kerr_exact_status exact_status =
+        kerr_exact_metric_gradient(0.0, 0.0, z, exact);
+    const hermite3d_status interpolation_status =
+        hermite3d_interpolate_value_gradient(
+            grid, 0.0, 0.0, z, KERR_EXACT_COMPONENT_COUNT, functions,
+            interpolated);
+
+    if (fabs(z) < throat || exact_status != KERR_EXACT_SUCCESS) {
+      fprintf(stderr,
+              "exact z-profile evaluation failed at sample %zu, z=%a: %s\n",
+              sample, z, exact_status_name(exact_status));
+      return 0;
+    }
+    if (interpolation_status != HERMITE3D_SUCCESS) {
+      fprintf(stderr,
+              "z-profile interpolation failed at sample %zu, z=%a: %s\n",
+              sample, z, hermite_status_name(interpolation_status));
+      return 0;
+    }
+
+    if (arguments->z_profile_quantity == 0) {
+      exact_value = exact[arguments->z_profile_component].value;
+      interpolated_value =
+          interpolated[arguments->z_profile_component].value;
+    } else {
+      const size_t axis = arguments->z_profile_quantity - 1;
+      exact_value = exact[arguments->z_profile_component].gradient[axis];
+      interpolated_value =
+          interpolated[arguments->z_profile_component].gradient[axis];
+    }
+    error = (long double)interpolated_value - (long double)exact_value;
+    if (!isfinite(exact_value) || !isfinite(interpolated_value) ||
+        !isfinite(error)) {
+      fprintf(stderr,
+              "nonfinite z-profile value for %s:%s at sample %zu, z=%a\n",
+              component_name, selected_quantity, sample, z);
+      return 0;
+    }
+    if (fprintf(stream, "%s,%s,%zu,%.17g,%.17g,%.17g,%.21Lg\n",
+                component_name, selected_quantity, resolution, z, exact_value,
+                interpolated_value, error) < 0) {
+      fprintf(stderr, "could not write z-profile CSV\n");
+      return 0;
+    }
+  }
+  return 1;
+}
+
 static int evaluate_level(const options *arguments, size_t resolution,
-                          double half_width, level_summary *summary) {
+                          double half_width, double throat,
+                          FILE *z_profile_stream,
+                          level_summary *summary) {
   size_t dimension;
   size_t grid_points;
   size_t total_values;
@@ -405,6 +603,13 @@ static int evaluate_level(const options *arguments, size_t resolution,
   grid.stride0 = 1;
   grid.stride1 = dimension;
   grid.stride2 = dimension * dimension;
+
+  if (arguments->z_profile_enabled &&
+      !write_z_profile(z_profile_stream, arguments, resolution, half_width,
+                       throat, &grid, functions)) {
+    free(storage);
+    return 0;
+  }
 
   for (size_t point = 0; point < arguments->point_count; ++point) {
     const double x = half_width * (2.0 * uniform_open(&random_state) - 1.0);
@@ -555,6 +760,13 @@ static void print_results(const options *arguments, const level_summary *levels,
   printf("  random points = %zu, seed = 0x%016" PRIx64 "\n",
          arguments->point_count, arguments->seed);
   printf("  random cloud is uniform, unfiltered, and identical at every level\n");
+  if (arguments->z_profile_enabled) {
+    printf("  z profile = %s:%s, %zu midpoint samples, %s\n",
+           kerr_exact_component_name(
+               (kerr_exact_component)arguments->z_profile_component),
+           quantity_name(arguments->z_profile_quantity),
+           arguments->z_profile_samples, arguments->z_profile_output);
+  }
   printf("\nGrid diagnostics\n");
   printf("       N   stored              h          min r      min r/h  min grid r\n");
   for (size_t level = 0; level < arguments->resolution_count; ++level) {
@@ -589,6 +801,7 @@ int main(int argc, char **argv) {
   const double throat = kerr_exact_throat_radius();
   const double half_width = 5.0 * throat;
   level_summary *levels;
+  FILE *z_profile_stream = NULL;
 
   if (parsed == 1) return EXIT_SUCCESS;
   if (parsed != 2) {
@@ -613,14 +826,47 @@ int main(int argc, char **argv) {
     return EXIT_FAILURE;
   }
 
-  for (size_t level = 0; level < arguments.resolution_count; ++level) {
-    fprintf(stderr, "evaluating N=%zu ...\n", arguments.resolutions[level]);
-    if (!evaluate_level(&arguments, arguments.resolutions[level], half_width,
-                        &levels[level])) {
+  if (arguments.z_profile_enabled) {
+    z_profile_stream = fopen(arguments.z_profile_output, "w");
+    if (z_profile_stream == NULL) {
+      fprintf(stderr, "could not open z-profile output '%s': %s\n",
+              arguments.z_profile_output, strerror(errno));
       free(levels);
       free(arguments.resolutions);
       return EXIT_FAILURE;
     }
+    if (fprintf(z_profile_stream,
+                "component,quantity,resolution,z,analytic,interpolated,error\n") <
+        0) {
+      fprintf(stderr, "could not write z-profile header to '%s'\n",
+              arguments.z_profile_output);
+      fclose(z_profile_stream);
+      free(levels);
+      free(arguments.resolutions);
+      return EXIT_FAILURE;
+    }
+  }
+
+  for (size_t level = 0; level < arguments.resolution_count; ++level) {
+    fprintf(stderr, "evaluating N=%zu ...\n", arguments.resolutions[level]);
+    if (!evaluate_level(&arguments, arguments.resolutions[level], half_width,
+                        throat, z_profile_stream, &levels[level])) {
+      if (z_profile_stream != NULL) fclose(z_profile_stream);
+      free(levels);
+      free(arguments.resolutions);
+      return EXIT_FAILURE;
+    }
+  }
+
+  if (z_profile_stream != NULL) {
+    if (fclose(z_profile_stream) != 0) {
+      fprintf(stderr, "could not finish z-profile output '%s': %s\n",
+              arguments.z_profile_output, strerror(errno));
+      free(levels);
+      free(arguments.resolutions);
+      return EXIT_FAILURE;
+    }
+    fprintf(stderr, "wrote z profile to %s\n", arguments.z_profile_output);
   }
 
   print_results(&arguments, levels, throat, half_width);

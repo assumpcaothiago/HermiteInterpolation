@@ -53,6 +53,64 @@ The default seed is `0x4b4552524845524d`. Resolution values must be distinct,
 strictly increasing, and even. A single resolution is allowed and reports
 errors without convergence orders.
 
+## Plot a variable on the z axis
+
+The convergence executable can additionally sample one metric component or
+first derivative on the rotation axis `x=y=0`. This diagnostic does not alter
+the random cloud or its norms. Select a component and quantity with
+`COMPONENT:QUANTITY`, where the components are
+
+```text
+tt tx ty tz xx xy xz yy yz zz
+```
+
+and the quantities are `value`, `dx`, `dy`, and `dz`. For example, export
+`d g_xy/dz` at 2000 fixed physical positions for every requested resolution:
+
+```sh
+./build/kerr_convergence \
+    --resolutions 32,48,64,96 \
+    --points 10000 \
+    --z-profile xy:dz \
+    --z-samples 2000 \
+    --z-output build/g_xy_dz.csv
+```
+
+The CSV columns are:
+
+```text
+component,quantity,resolution,z,analytic,interpolated,error
+```
+
+The profile sample count must be even. Half of its midpoint samples lie on
+each exterior branch, `-5s<z<-s` and `s<z<5s`. Thus neither the lower LES
+sheet `|z|<s` nor the horizon itself is used as a profile query.
+
+Render the CSV with the accompanying Matplotlib script:
+
+```sh
+python3 plot_z_profile.py \
+    build/g_xy_dz.csv \
+    --output build/g_xy_dz.png
+```
+
+The upper panel overlays the analytical curve and one Hermite curve per grid
+resolution. The lower panel shows absolute error, normally on a logarithmic
+scale. The two exterior curves are not connected across the excluded interval
+`|z|<s`, and vertical markers identify `z=0` and the throats `z=+/-s`.
+
+For convenience, both export and plotting can be performed with one target:
+
+```sh
+make plot \
+    PROFILE=xy:dz \
+    Z_SAMPLES=2000 \
+    ARGS='--resolutions 32,48,64,96 --points 10000'
+```
+
+Override `PROFILE_CSV` or `PROFILE_PNG` to choose different output paths. The
+plot target requires Matplotlib; the C build and ordinary checks do not.
+
 ## Cell-centered grid
 
 For an active resolution `N`, the grid spacing is
@@ -72,6 +130,11 @@ x(i) = -5s + (i - 3 + 1/2) h,
 and likewise for `y` and `z`. Because `N` is even, coordinates around the
 origin are `...,-3h/2,-h/2,h/2,3h/2,...`; the singular puncture is never a
 grid sample.
+
+The rectangular grid still contains values on both LES exterior sheets. This
+is necessary because the six-point Cartesian stencil of a query close to the
+throat can cross the sphere `r=s`. Query selection, rather than grid storage,
+is restricted to the chosen exterior sheet.
 
 The ten functions use a structure-of-arrays allocation and the contiguous
 logical strides
