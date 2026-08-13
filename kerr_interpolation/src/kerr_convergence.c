@@ -82,12 +82,30 @@ static uint64_t splitmix64_next(uint64_t *state) {
 /*
  * Return the midpoint of one of 2^52 equal bins in (0,1).  The numerator is
  * odd, so the binary64 result can never equal 1/2.  Applying this independently
- * to x, y, and z therefore cannot produce the excluded puncture (0,0,0), and
- * it needs no rejection or resampling that would bias the cloud.
+ * to x, y, and z therefore cannot produce the puncture (0,0,0), even before
+ * the separate radial-domain rejection is applied.
  */
 static double uniform_open(uint64_t *state) {
   const uint64_t bin = splitmix64_next(state) >> 12;
   return (double)(2 * bin + 1) * 0x1p-53;
+}
+
+/*
+ * Rejection from the cube gives a uniform cloud on its exterior portion
+ * r >= s.  Resetting the SplitMix64 state at every resolution reproduces the
+ * same accepted points, including the same rejected candidates.
+ */
+static void sample_exterior_point(uint64_t *state, double half_width,
+                                  double throat, double coordinate[3],
+                                  double *radius) {
+  do {
+    coordinate[0] = half_width * (2.0 * uniform_open(state) - 1.0);
+    coordinate[1] = half_width * (2.0 * uniform_open(state) - 1.0);
+    coordinate[2] = half_width * (2.0 * uniform_open(state) - 1.0);
+    *radius = sqrt(coordinate[0] * coordinate[0] +
+                   coordinate[1] * coordinate[1] +
+                   coordinate[2] * coordinate[2]);
+  } while (*radius < throat);
 }
 
 static void add_squared_error(scaled_sum_squares *sum, long double value) {
@@ -612,31 +630,34 @@ static int evaluate_level(const options *arguments, size_t resolution,
   }
 
   for (size_t point = 0; point < arguments->point_count; ++point) {
-    const double x = half_width * (2.0 * uniform_open(&random_state) - 1.0);
-    const double y = half_width * (2.0 * uniform_open(&random_state) - 1.0);
-    const double z = half_width * (2.0 * uniform_open(&random_state) - 1.0);
-    const double radius = sqrt(x * x + y * y + z * z);
+    double coordinate[3];
+    double radius;
     kerr_exact_value_gradient exact[KERR_EXACT_COMPONENT_COUNT];
     hermite3d_value_gradient interpolated[KERR_EXACT_COMPONENT_COUNT];
+    sample_exterior_point(&random_state, half_width, throat, coordinate,
+                          &radius);
     const kerr_exact_status exact_status =
-        kerr_exact_metric_gradient(x, y, z, exact);
+        kerr_exact_metric_gradient(coordinate[0], coordinate[1], coordinate[2],
+                                   exact);
     const hermite3d_status interpolation_status =
         hermite3d_interpolate_value_gradient(
-            &grid, x, y, z, KERR_EXACT_COMPONENT_COUNT, functions,
-            interpolated);
+            &grid, coordinate[0], coordinate[1], coordinate[2],
+            KERR_EXACT_COMPONENT_COUNT, functions, interpolated);
 
     if (radius < minimum_sample_radius) minimum_sample_radius = radius;
     if (exact_status != KERR_EXACT_SUCCESS) {
       fprintf(stderr,
               "exact query evaluation failed at point %zu (%a, %a, %a): %s\n",
-              point, x, y, z, exact_status_name(exact_status));
+              point, coordinate[0], coordinate[1], coordinate[2],
+              exact_status_name(exact_status));
       free(storage);
       return 0;
     }
     if (interpolation_status != HERMITE3D_SUCCESS) {
       fprintf(stderr,
               "interpolation failed at point %zu (%a, %a, %a): %s\n",
-              point, x, y, z, hermite_status_name(interpolation_status));
+              point, coordinate[0], coordinate[1], coordinate[2],
+              hermite_status_name(interpolation_status));
       free(storage);
       return 0;
     }
@@ -759,7 +780,7 @@ static void print_results(const options *arguments, const level_summary *levels,
   printf("  side length = 10s = five horizon diameters\n");
   printf("  random points = %zu, seed = 0x%016" PRIx64 "\n",
          arguments->point_count, arguments->seed);
-  printf("  random cloud is uniform, unfiltered, and identical at every level\n");
+  printf("  random cloud is uniform on r >= s and identical at every level\n");
   if (arguments->z_profile_enabled) {
     printf("  z profile = %s:%s, %zu midpoint samples, %s\n",
            kerr_exact_component_name(
@@ -778,9 +799,9 @@ static void print_results(const options *arguments, const level_summary *levels,
   }
 
   printf("\nThe norms below are finite-cloud sampled RMS (L2) and sampled maxima\n");
-  printf("(Linf), not continuum norms over the punctured cube. Expected local\n");
-  printf("smooth-function orders are 5 for values and 4 for gradients; no order\n");
-  printf("threshold is enforced, and negative or erratic orders remain visible.\n");
+  printf("(Linf) on the cube portion r >= s. Expected smooth-function orders are\n");
+  printf("5 for values and 4 for gradients; no order threshold is enforced, and\n");
+  printf("negative or erratic measured orders remain visible.\n");
 
   for (size_t quantity = 0; quantity < QUANTITY_COUNT; ++quantity) {
     printf("\n%s\n", headings[quantity]);

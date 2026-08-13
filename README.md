@@ -123,8 +123,9 @@ make -C kerr_notes check
 ## Run the Kerr convergence experiment
 
 The Kerr experiment initializes all ten independent four-metric components on
-cell-centered grids and interpolates them together at one unfiltered random
-point cloud. Build it and select the resolutions and point count at run time:
+cell-centered grids and interpolates them together at one deterministic random
+point cloud restricted to the LES exterior sheet `r>=s`. Build it and select
+the resolutions and point count at run time:
 
 ```sh
 make -C kerr_interpolation
@@ -150,7 +151,7 @@ make -C kerr_interpolation check
 
 See the [experiment README](kerr_interpolation/README.md) for its exact metric
 API, cell-centered ghost grid, deterministic random cloud, and interpretation
-of the sampled error norms near the Kerr puncture.
+of the sampled exterior-domain error norms.
 
 ## Numerical scope
 

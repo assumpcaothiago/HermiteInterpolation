@@ -76,6 +76,8 @@ check: check-generated $(EXACT_TEST) $(CONVERGENCE)
 	@awk -F, 'NR > 1 && $$4 > -0.46650635094610965 && \
 		$$4 < 0.46650635094610965 { exit 1 }' \
 		$(BUILD_DIR)/smoke-profile.csv
+	@awk '$$1 == 8 || $$1 == 12 { if ($$4 < 0.46650635094610965) exit 1 }' \
+		$(BUILD_DIR)/smoke-output.txt
 	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) plot_z_profile.py --help > /dev/null
 
 clean:

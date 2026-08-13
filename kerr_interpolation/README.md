@@ -150,10 +150,11 @@ all ten functions, so the coordinate weights are computed once and reused.
 
 ## Random points and reported errors
 
-SplitMix64 produces one uniform, unfiltered cloud in the open active cube. The
-generator is reset to the same seed at each resolution, so every level uses
-identical physical points. Its binary64 midpoint mapping cannot produce the
-origin and does not reject, replace, or specialize any query.
+SplitMix64 first generates candidates uniformly in the open active cube and
+rejects those with `r<s`. The accepted cloud is therefore uniform on the cube
+portion `r>=s` and contains no queries on the lower LES sheet. The generator
+is reset to the same seed at each resolution, so every level repeats both the
+rejections and the identical accepted physical points.
 
 Component order is:
 
@@ -167,14 +168,12 @@ sampled `L2`), sampled maximum error (sampled `Linf`), and adjacent-level
 orders computed with the actual spacing ratio. The `tz` component and all of
 its derivatives are exactly zero and therefore have undefined (`--`) orders.
 
-These are finite-cloud sampled norms, not continuum norms on the whole cube.
-The cube contains the excluded puncture in its continuum domain; spatial
-metric components diverge roughly as `r^-4` and their gradients as `r^-5`.
-Consequently a close random point can dominate the reported errors and cause
-nonmonotone or negative apparent orders. The program intentionally retains
-that behavior for later analysis. In a smooth neighborhood separated from the
-puncture, the expected local orders are five for values and four for first
-derivatives, but the executable enforces no convergence threshold.
+These are finite-cloud sampled norms rather than exact continuum norms. On the
+sampled exterior domain the metric components and Cartesian derivatives are
+finite, including their smooth spatial extension to the throat. The expected
+orders are five for values and four for first derivatives, but individual
+two-level estimates can still oscillate with interpolation phase, and the
+executable intentionally enforces no convergence threshold.
 
 ## Analytic evaluator and verification
 
