@@ -1,0 +1,346 @@
+\documentclass[11pt]{article}
+
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage[hidelinks]{hyperref}
+\usepackage[nameinlink,noabbrev]{cleveref}
+
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\Ham}{\mathcal{H}}
+\newcommand{\Lag}{\mathcal{L}}
+\newcommand{\RBL}{R}
+
+\title{Timelike Geodesics in ADM Variables}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+These notes derive a first-order Hamiltonian description of a timelike
+geodesic using the lapse, shift, and spatial metric of a (3+1)
+decomposition.  The resulting equations require precisely the ADM fields
+\(\alpha,\beta^i,\gamma_{ij}\) and their spatial derivatives.  They therefore
+provide a natural mathematical formulation for comparing exact, Hermite, and
+Lagrange-interpolated metric data along a particle trajectory.  Unit rest mass
+and signature \((-+++)\) are used throughout.
+\end{abstract}
+
+\tableofcontents
+
+\section{Geodesics and canonical momentum}
+
+Let \(x^\mu(\tau)\) be a future-directed timelike curve parametrized by proper
+time.  Its four-velocity \(u^\mu=\dd x^\mu/\dd\tau\) satisfies
+\begin{equation}
+ g_{\mu\nu}u^\mu u^\nu=-1.
+ \label{eq:normalization}
+\end{equation}
+Extremizing proper time gives the geodesic equation
+\begin{equation}
+ \frac{\dd u^\mu}{\dd\tau}
+ +\Gamma^\mu{}_{\rho\sigma}u^\rho u^\sigma=0,
+ \qquad
+ \Gamma^\mu{}_{\rho\sigma}
+ =\frac12g^{\mu\nu}
+ \left(\partial_\rho g_{\nu\sigma}
+      +\partial_\sigma g_{\nu\rho}
+      -\partial_\nu g_{\rho\sigma}\right).
+ \label{eq:christoffel-geodesic}
+\end{equation}
+Thus a geodesic probes both the metric and its first derivatives.
+
+An equivalent canonical description uses the covariant momentum
+\(p_\mu=u_\mu\) and the four-dimensional Hamiltonian
+\begin{equation}
+ \Ham_4(x,p)=\frac12g^{\mu\nu}p_\mu p_\nu.
+ \label{eq:four-hamiltonian}
+\end{equation}
+Hamilton's equations with affine parameter \(\tau\) are
+\begin{equation}
+ \frac{\dd x^\mu}{\dd\tau}=g^{\mu\nu}p_\nu,
+ \qquad
+ \frac{\dd p_\mu}{\dd\tau}
+ =-\frac12(\partial_\mu g^{\rho\sigma})p_\rho p_\sigma,
+ \label{eq:four-hamilton-equations}
+\end{equation}
+subject to the mass-shell constraint
+\begin{equation}
+ g^{\mu\nu}p_\mu p_\nu=-1,
+ \qquad \Ham_4=-\frac12.
+ \label{eq:mass-shell}
+\end{equation}
+
+\section{The ADM decomposition}
+
+Write the line element as
+\begin{equation}
+ \dd s^2=-\alpha^2\dd t^2
+ +\gamma_{ij}(\dd x^i+\beta^i\dd t)
+                  (\dd x^j+\beta^j\dd t).
+ \label{eq:adm-line-element}
+\end{equation}
+Here \(\alpha\) is the lapse, \(\beta^i\) the contravariant shift, and
+\(\gamma_{ij}\) the positive-definite spatial metric.  The spacetime metric
+and its inverse are
+\begin{equation}
+ g_{\mu\nu}=
+ \begin{pmatrix}
+ -\alpha^2+\beta_k\beta^k & \beta_j\\
+ \beta_i & \gamma_{ij}
+ \end{pmatrix},
+ \qquad
+ g^{\mu\nu}=
+ \begin{pmatrix}
+ -\alpha^{-2} & \alpha^{-2}\beta^j\\
+ \alpha^{-2}\beta^i &
+ \gamma^{ij}-\alpha^{-2}\beta^i\beta^j
+ \end{pmatrix},
+ \label{eq:adm-matrices}
+\end{equation}
+where \(\beta_i=\gamma_{ij}\beta^j\) and
+\(\gamma^{ik}\gamma_{kj}=\delta^i{}_j\).  In deriving the coordinate-time
+system below, \(\alpha>0\) and \(t\) is assumed to be a valid time coordinate
+on the region traversed by the geodesic.
+
+Substitution into the mass-shell condition gives
+\begin{equation}
+ \gamma^{ij}p_i p_j
+ -\frac{(p_t-\beta^i p_i)^2}{\alpha^2}=-1.
+ \label{eq:adm-mass-shell}
+\end{equation}
+Define
+\begin{equation}
+ W=\sqrt{1+\gamma^{ij}p_i p_j}.
+ \label{eq:W-definition}
+\end{equation}
+Future-directed motion has \(u^t>0\), which selects
+\begin{equation}
+ p_t-\beta^i p_i=-\alpha W.
+ \label{eq:future-branch}
+\end{equation}
+Solving for \(-p_t\) produces the coordinate-time Hamiltonian
+\begin{equation}
+ \boxed{\Ham(t,x^i,p_i)=-p_t=\alpha W-\beta^i p_i.}
+ \label{eq:reduced-hamiltonian}
+\end{equation}
+Indeed, restricting the canonical action to the mass shell and using \(t\)
+as parameter gives
+\begin{equation}
+ \int p_\mu\,\dd x^\mu
+ =\int\left(p_i\frac{\dd x^i}{\dd t}+p_t\right)\dd t
+ =\int\left(p_i\frac{\dd x^i}{\dd t}-\Ham\right)\dd t,
+ \label{eq:reduced-action}
+\end{equation}
+which is the standard first-order action with Hamiltonian \(-p_t\).
+The three canonical momenta are covariant components \(p_i\), not coordinate
+velocities or contravariant momenta.
+
+\section{Coordinate-time evolution equations}
+
+On any region where \(t\) is a valid time coordinate, Hamilton's equations for
+\cref{eq:reduced-hamiltonian} are
+\begin{equation}
+ \boxed{
+ \frac{\dd x^i}{\dd t}
+ =\frac{\alpha\gamma^{ij}p_j}{W}-\beta^i
+ }
+ \label{eq:position-equation}
+\end{equation}
+and
+\begin{equation}
+ \boxed{
+ \frac{\dd p_i}{\dd t}
+ =-W\,\partial_i\alpha
+  -\frac{\alpha}{2W}(\partial_i\gamma^{jk})p_jp_k
+  +(\partial_i\beta^j)p_j.
+ }
+ \label{eq:momentum-equation-inverse}
+\end{equation}
+These equations remain Hamiltonian if the ADM fields depend explicitly on
+time, although then \(\Ham\) need not be conserved.
+
+It is often preferable to differentiate the supplied covariant spatial
+metric rather than its inverse.  Differentiating
+\(\gamma^{jm}\gamma_{mk}=\delta^j{}_k\) gives
+\begin{equation}
+ \partial_i\gamma^{jk}
+ =-\gamma^{jm}(\partial_i\gamma_{mn})\gamma^{nk}.
+ \label{eq:inverse-derivative}
+\end{equation}
+With \(q^i=\gamma^{ij}p_j\), the momentum equation becomes
+\begin{equation}
+ \boxed{
+ \frac{\dd p_i}{\dd t}
+ =-W\,\partial_i\alpha
+  +\frac{\alpha}{2W}q^mq^n\partial_i\gamma_{mn}
+  +p_j\partial_i\beta^j.
+ }
+ \label{eq:momentum-equation-covariant}
+\end{equation}
+Consequently the geodesic right-hand side requires exactly
+\begin{equation}
+ \alpha,\quad\beta^i,\quad\gamma_{ij},
+ \qquad
+ \partial_k\alpha,\quad\partial_k\beta^i,
+ \quad\partial_k\gamma_{ij}.
+ \label{eq:required-data}
+\end{equation}
+No Christoffel symbols need to be formed.  For a time-dependent metric the
+explicit time dependence of these fields enters \(\Ham(t,x,p)\); canonical
+evolution of \(x^i,p_i\) still uses their spatial derivatives.
+
+The relation to proper time follows directly from
+\cref{eq:future-branch}:
+\begin{equation}
+ W=\alpha u^t,
+ \qquad
+ \frac{\dd\tau}{\dd t}=\frac{\alpha}{W}.
+ \label{eq:proper-coordinate-time}
+\end{equation}
+
+\section{Initial data}
+
+Canonical initial data consist of \(x^i\) and \(p_i\).  If a coordinate
+three-velocity \(v^i=\dd x^i/\dd t\) is specified instead, normalization of
+the four-velocity yields
+\begin{equation}
+ u^t=
+ \left[\alpha^2-
+ \gamma_{ij}(v^i+\beta^i)(v^j+\beta^j)\right]^{-1/2},
+ \label{eq:ut-from-velocity}
+\end{equation}
+provided the bracket is positive.  The canonical momentum is then
+\begin{equation}
+ p_i=u_i=u^t\gamma_{ij}(v^j+\beta^j).
+ \label{eq:momentum-from-velocity}
+\end{equation}
+Conversely,
+\cref{eq:position-equation} recovers \(v^i\) from \(p_i\).
+
+\section{Conserved quantities in a stationary, axisymmetric metric}
+
+If the metric is stationary, \(\partial_t g_{\mu\nu}=0\), then
+\begin{equation}
+ E=-p_t=\Ham
+ \label{eq:energy}
+\end{equation}
+is conserved.  If it is also axisymmetric, \(p_\phi=L_z\) is conserved.  In
+Cartesian coordinates adapted to rotations about the \(z\)-axis,
+\begin{equation}
+ L_z=x p_y-y p_x.
+ \label{eq:angular-momentum}
+\end{equation}
+Kerr geodesics additionally possess the Carter constant.  In
+Boyer--Lindquist coordinates, for unit rest mass, one common convention is
+\begin{equation}
+ Q=p_\theta^2+\cos^2\theta
+ \left[a^2(1-E^2)+\frac{L_z^2}{\sin^2\theta}\right].
+ \label{eq:carter}
+\end{equation}
+The quantities \(E\), \(L_z\), and \(Q\) provide independent geometric
+diagnostics of a computed trajectory.  A mass-shell residual is also useful
+if it is formed with an independently evolved or conserved \(p_t\).  It
+vanishes algebraically if one simply resets \(p_t=-\Ham(x,p)\) at every point.
+Conservation of an interpolated Hamiltonian should be distinguished from
+agreement with the corresponding exact invariant.
+
+\section{Equatorial circular Kerr data}
+
+For Kerr mass \(M\), spin \(a>0\), and a prograde timelike circular orbit of
+Boyer--Lindquist radius \(\RBL_0\), the angular frequency measured in the
+coordinate \(t\) is
+\begin{equation}
+ \Omega=\frac{\sqrt{M}}{\RBL_0^{3/2}+a\sqrt{M}}.
+ \label{eq:circular-frequency}
+\end{equation}
+The radius must lie in the region where the circular timelike solution exists;
+choosing it outside the prograde innermost stable circular orbit gives a stable
+reference orbit.
+At the equator the four-velocity has the form
+\begin{equation}
+ u^\mu=u^t(1,0,0,\Omega),
+ \qquad
+ u^t=\left[-g_{tt}-2g_{t\phi}\Omega
+                 -g_{\phi\phi}\Omega^2\right]^{-1/2}.
+ \label{eq:circular-four-velocity}
+\end{equation}
+
+For the modified quasi-isotropic radial coordinate used in the accompanying
+Kerr notes,
+\begin{equation}
+ \RBL=\frac{(r+s)^2}{r},
+ \qquad s=\frac{r_+}{4},
+ \qquad r_+=M+\sqrt{M^2-a^2}.
+ \label{eq:les-map}
+\end{equation}
+The exterior branch corresponding to \(\RBL_0>r_+=4s\) is
+\begin{equation}
+ r_0=\frac{\RBL_0-2s+\sqrt{\RBL_0(\RBL_0-4s)}}{2}.
+ \label{eq:les-inverse}
+\end{equation}
+At the Cartesian point \((x,y,z)=(r_0,0,0)\), the circular coordinate velocity
+is
+\begin{equation}
+ (v^x,v^y,v^z)=(0,r_0\Omega,0).
+ \label{eq:circular-cartesian-velocity}
+\end{equation}
+Equations~\eqref{eq:ut-from-velocity} and
+\eqref{eq:momentum-from-velocity} then determine the canonical initial
+momentum without requiring a separate transformation formula for \(p_i\).
+
+\section{Why interpolation smoothness matters}
+
+A metric reconstructed independently in each grid cell defines a piecewise
+Hamiltonian.  If neighboring reconstructions agree only in value, the
+Hamiltonian is continuous but its spatial derivatives can jump across a cell
+boundary.  The force in \cref{eq:momentum-equation-covariant} can therefore
+jump as a trajectory crosses that boundary.  Repeated crossings may turn
+small local defects into phase error or drift in the exact invariants.
+
+A quintic Hermite reconstruction prescribes the value, first derivative, and
+second derivative at both ends of every one-dimensional cell.  When adjacent
+cells share the same endpoint data, the piecewise field is \(C^2\).  The
+Hamiltonian force constructed from it is then at least continuous.  A local
+Lagrange polynomial is smooth within a fixed stencil, but changing the stencil
+at a grid boundary generally does not match derivatives of the old and new
+polynomials.  This distinction---global smoothness of the piecewise
+reconstruction rather than smoothness of each individual polynomial---is the
+central reason to study trajectories rather than isolated interpolation
+points.
+
+Three mathematically distinct trajectories can therefore be compared:
+\begin{enumerate}
+ \item the exact trajectory generated by analytic ADM fields and derivatives;
+ \item the trajectory generated by a globally \(C^2\), piecewise Hermite
+       reconstruction of those fields and its derivatives;
+ \item the trajectory generated by locally Lagrange-interpolated fields and a
+       chosen derivative construction.
+\end{enumerate}
+Comparisons of \(x^i(t)\), \(p_i(t)\), the instantaneous Hamiltonian vector
+field, and the exact invariants separate local force defects from their
+accumulated dynamical consequences.
+
+\section{Coordinate limitation at the Kerr throat}
+
+Assigning the signed lapse
+\begin{equation}
+ \alpha=(r-s)\sqrt{\frac{Q\Sigma}{rA}}
+ \label{eq:signed-lapse}
+\end{equation}
+makes the lapse smooth on the doubled spatial slice and removes the artificial
+cusp produced by \(\lvert r-s\rvert\).  It does not turn the modified
+quasi-isotropic coordinates into a horizon-penetrating spacetime chart.  At
+\(r=s\), the lapse
+vanishes and the four-metric determinant vanishes in these coordinates.
+Therefore a geodesic test formulated with coordinate time \(t\) should remain
+in the regular exterior, where \(\alpha>0\).  The negative lapse on the inner
+sheet supplies a smooth doubled-slice extension for interpolation; it should
+not be inserted into the future-branch argument of
+\cref{eq:future-branch} as though it were a positive ADM lapse in one connected
+spacetime chart.  Interpolation stencils may extend across the throat when
+sampling these smooth fields, but a physical trajectory cannot be evolved
+through the horizon using this coordinate chart.
+
+\end{document}

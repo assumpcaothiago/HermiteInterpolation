@@ -24,6 +24,8 @@ interpolated at that point.
 - [`kerr_adm_comparison/`](kerr_adm_comparison/) compares Hermite ADM values
   and direct gradients with the copied seven-point Lagrange interpolator and
   fourth-order finite differences of its interpolated values.
+- [`geodesic_notes/`](geodesic_notes/) derives timelike geodesic evolution in
+  ADM Hamiltonian variables and explains the role of interpolation smoothness.
 - [`references/`](references/) contains the source material used when deriving
   and checking the mathematics.
 - [`mathematica_notebooks/`](mathematica_notebooks/) contains earlier symbolic
@@ -121,6 +123,12 @@ The independent Kerr notes and their symbolic checks can be built with:
 
 ```sh
 make -C kerr_notes check
+```
+
+The concise geodesic notes can be built and checked with:
+
+```sh
+make -C geodesic_notes check
 ```
 
 ## Compare Hermite and Lagrange ADM interpolation
