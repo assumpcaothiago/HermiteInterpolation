@@ -133,6 +133,20 @@ make -C kerr_interpolation run \
     ARGS='--resolutions 32,48,64,96 --points 10000'
 ```
 
+Grid initialization and random-point interpolation use OpenMP. For example:
+
+```sh
+OMP_NUM_THREADS=8 \
+OMP_DYNAMIC=FALSE \
+OMP_PROC_BIND=spread \
+OMP_PLACES=cores \
+make -C kerr_interpolation run \
+    ARGS='--resolutions 64,96 --points 10000'
+```
+
+The thread count affects execution time but not the grid allocation. At
+`N=800`, the ten stored fields still require about 39.0 GiB.
+
 An optional z-axis diagnostic overlays any metric component or first
 derivative with its analytical expression:
 

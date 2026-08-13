@@ -53,6 +53,42 @@ The default seed is `0x4b4552524845524d`. Resolution values must be distinct,
 strictly increasing, and even. A single resolution is allowed and reports
 errors without convergence orders.
 
+## OpenMP parallel execution
+
+The convergence executable uses OpenMP for both Cartesian grid initialization
+and random-point interpolation. Set the team size with the standard OpenMP
+environment variable:
+
+```sh
+OMP_NUM_THREADS=8 \
+OMP_DYNAMIC=FALSE \
+OMP_PROC_BIND=spread \
+OMP_PLACES=cores \
+./build/kerr_convergence --resolutions 64,96 --points 10000
+```
+
+`OMP_NUM_THREADS` is the usual control. `OMP_DYNAMIC=FALSE` requests the full
+team, while `OMP_PROC_BIND=spread` and `OMP_PLACES=cores` can improve placement
+on multi-core or multi-socket machines. If these variables are unset, the
+OpenMP runtime chooses its normal defaults. The program reports the actual
+grid-initialization and query team sizes for every resolution.
+
+Grid rows are statically divided among threads while retaining contiguous
+`xx0` traversal. This also provides parallel first-touch placement for the
+large field allocation. Random queries use static scheduling and private norm
+accumulators that are merged after the parallel region. Separate resolutions,
+z-axis profile export, CSV output, and final reporting remain serial.
+
+OpenMP reduces computation time but not storage. The ten fields require
+
+```text
+10 * (N+6)^3 * sizeof(double)
+```
+
+bytes. In particular, `N=800` requires about 39.0 GiB. A machine without
+enough physical memory may swap heavily, and a sufficiently large run may be
+limited by memory bandwidth or NUMA placement rather than arithmetic.
+
 ## Plot a variable on the z axis
 
 The convergence executable can additionally sample one metric component or
@@ -152,9 +188,10 @@ all ten functions, so the coordinate weights are computed once and reused.
 
 SplitMix64 first generates candidates uniformly in the open active cube and
 rejects those with `r<s`. The accepted cloud is therefore uniform on the cube
-portion `r>=s` and contains no queries on the lower LES sheet. The generator
-is reset to the same seed at each resolution, so every level repeats both the
-rejections and the identical accepted physical points.
+portion `r>=s` and contains no queries on the lower LES sheet. The complete
+accepted cloud is generated once, before any OpenMP region, and its immutable
+coordinates are reused at every resolution. Thus thread scheduling cannot
+change the sampled points.
 
 Component order is:
 
@@ -185,8 +222,10 @@ value-gradient kernels: grid initialization does not pay to compute unused
 derivatives.
 
 The generated C source and high-precision fixture header are committed, so a
-normal build requires only a C99 compiler, `make`, the math library, and the
-neighboring `hermite3d` source. Regenerate or verify them with:
+normal convergence build requires a C99 compiler with OpenMP support, `make`,
+the math library, and the neighboring `hermite3d` source. The exact-evaluator
+unit test and `hermite3d` themselves do not acquire an OpenMP dependency.
+Regenerate or verify the symbolic output with:
 
 ```sh
 make regen

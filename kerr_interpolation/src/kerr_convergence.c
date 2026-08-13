@@ -1,9 +1,11 @@
 #include "hermite3d.h"
 #include "kerr_exact.h"
+#include "kerr_parallel_helpers.h"
 
 #include <errno.h>
 #include <inttypes.h>
 #include <math.h>
+#include <omp.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,21 +32,29 @@ typedef struct options {
   const char *z_profile_output;
 } options;
 
-/*
- * The scaled representation scale*sqrt(sum_squares) is the same strategy
- * used by robust BLAS norm implementations.  It avoids forming error^2 when
- * a finite interpolation error is large enough that its square would overflow
- * even though the requested norm is still representable.
- */
-typedef struct scaled_sum_squares {
-  long double scale;
-  long double sum_squares;
-} scaled_sum_squares;
+typedef struct query_point {
+  double coordinate[3];
+  double radius;
+} query_point;
 
 typedef struct error_accumulator {
-  scaled_sum_squares squares;
+  kerr_scaled_sum_squares squares;
   long double maximum;
 } error_accumulator;
+
+typedef struct thread_accumulator {
+  error_accumulator component[QUANTITY_COUNT][KERR_EXACT_COMPONENT_COUNT];
+  error_accumulator aggregate[QUANTITY_COUNT];
+  kerr_indexed_failure failure;
+} thread_accumulator;
+
+enum query_failure_kind {
+  QUERY_FAILURE_NONE = 0,
+  QUERY_FAILURE_EXACT,
+  QUERY_FAILURE_INTERPOLATION,
+  QUERY_FAILURE_NONFINITE_VALUE,
+  QUERY_FAILURE_NONFINITE_DERIVATIVE
+};
 
 typedef struct error_norm {
   long double rms;
@@ -57,6 +67,8 @@ typedef struct level_summary {
   double spacing;
   double minimum_sample_radius;
   double minimum_grid_radius;
+  int grid_threads;
+  int query_threads;
   error_norm component[QUANTITY_COUNT][KERR_EXACT_COMPONENT_COUNT];
   error_norm aggregate[QUANTITY_COUNT];
 } level_summary;
@@ -92,8 +104,7 @@ static double uniform_open(uint64_t *state) {
 
 /*
  * Rejection from the cube gives a uniform cloud on its exterior portion
- * r >= s.  Resetting the SplitMix64 state at every resolution reproduces the
- * same accepted points, including the same rejected candidates.
+ * r >= s.  The cloud is generated once and then reused at every resolution.
  */
 static void sample_exterior_point(uint64_t *state, double half_width,
                                   double throat, double coordinate[3],
@@ -108,25 +119,38 @@ static void sample_exterior_point(uint64_t *state, double half_width,
   } while (*radius < throat);
 }
 
-static void add_squared_error(scaled_sum_squares *sum, long double value) {
-  const long double magnitude = fabsl(value);
+static query_point *generate_query_cloud(size_t count, uint64_t seed,
+                                         double half_width, double throat,
+                                         double *minimum_radius) {
+  query_point *points;
+  uint64_t random_state = seed;
 
-  if (magnitude == 0.0L) return;
-  if (sum->scale < magnitude) {
-    const long double ratio = sum->scale / magnitude;
-    sum->sum_squares = 1.0L + sum->sum_squares * ratio * ratio;
-    sum->scale = magnitude;
-  } else {
-    const long double ratio = magnitude / sum->scale;
-    sum->sum_squares += ratio * ratio;
+  if (multiply_overflows_size_t(count, sizeof(*points))) return NULL;
+  points = (query_point *)malloc(count * sizeof(*points));
+  if (points == NULL) return NULL;
+
+  *minimum_radius = INFINITY;
+  for (size_t point = 0; point < count; ++point) {
+    sample_exterior_point(&random_state, half_width, throat,
+                          points[point].coordinate, &points[point].radius);
+    if (points[point].radius < *minimum_radius)
+      *minimum_radius = points[point].radius;
   }
+  return points;
 }
 
 static void add_error(error_accumulator *accumulator, long double error) {
   const long double magnitude = fabsl(error);
 
-  add_squared_error(&accumulator->squares, error);
+  kerr_scaled_sum_add(&accumulator->squares, error);
   if (magnitude > accumulator->maximum) accumulator->maximum = magnitude;
+}
+
+static void merge_error(error_accumulator *destination,
+                        const error_accumulator *source) {
+  kerr_scaled_sum_merge(&destination->squares, &source->squares);
+  if (source->maximum > destination->maximum)
+    destination->maximum = source->maximum;
 }
 
 static error_norm finish_norm(const error_accumulator *accumulator,
@@ -457,11 +481,37 @@ static int compute_grid_sizes(size_t resolution, size_t *stored_dimension,
 }
 
 static int fill_grid(double *storage, size_t dimension, size_t grid_points,
-                     double start, double spacing) {
+                     double start, double spacing, int *team_size) {
+  const int max_threads = omp_get_max_threads();
+  kerr_indexed_failure *failures;
+  const kerr_indexed_failure *first_failure;
+
+  if (max_threads < 1 ||
+      multiply_overflows_size_t((size_t)max_threads, sizeof(*failures))) {
+    fprintf(stderr, "invalid OpenMP grid team size\n");
+    return 0;
+  }
+  failures = (kerr_indexed_failure *)malloc((size_t)max_threads *
+                                            sizeof(*failures));
+  if (failures == NULL) {
+    fprintf(stderr, "could not allocate OpenMP grid failure records\n");
+    return 0;
+  }
+  for (int thread = 0; thread < max_threads; ++thread)
+    kerr_failure_clear(&failures[thread]);
+
+  *team_size = 1;
+#pragma omp parallel for collapse(2) schedule(static) default(none)            \
+    shared(storage, dimension, grid_points, start, spacing, failures,          \
+               team_size)
   for (size_t index2 = 0; index2 < dimension; ++index2) {
-    const double z = start + (double)index2 * spacing;
     for (size_t index1 = 0; index1 < dimension; ++index1) {
+      const double z = start + (double)index2 * spacing;
       const double y = start + (double)index1 * spacing;
+      const int thread = omp_get_thread_num();
+
+      /* The collapsed (0,0) iteration is unique; the loop barrier publishes it. */
+      if (index2 == 0 && index1 == 0) *team_size = omp_get_num_threads();
       for (size_t index0 = 0; index0 < dimension; ++index0) {
         const double x = start + (double)index0 * spacing;
         const size_t offset = index0 + dimension * (index1 + dimension * index2);
@@ -469,10 +519,8 @@ static int fill_grid(double *storage, size_t dimension, size_t grid_points,
         const kerr_exact_status status = kerr_exact_metric(x, y, z, values);
 
         if (status != KERR_EXACT_SUCCESS) {
-          fprintf(stderr,
-                  "exact grid evaluation failed at (%a, %a, %a): %s\n",
-                  x, y, z, exact_status_name(status));
-          return 0;
+          kerr_failure_record(&failures[thread], offset, 1, 0, 0, (int)status);
+          continue;
         }
         for (size_t component = 0; component < KERR_EXACT_COMPONENT_COUNT;
              ++component) {
@@ -481,6 +529,22 @@ static int fill_grid(double *storage, size_t dimension, size_t grid_points,
       }
     }
   }
+
+  first_failure = kerr_first_failure(failures, (size_t)max_threads);
+  if (first_failure != NULL) {
+    const size_t index0 = first_failure->index % dimension;
+    const size_t index1 = (first_failure->index / dimension) % dimension;
+    const size_t index2 = first_failure->index / (dimension * dimension);
+    const double x = start + (double)index0 * spacing;
+    const double y = start + (double)index1 * spacing;
+    const double z = start + (double)index2 * spacing;
+    fprintf(stderr, "exact grid evaluation failed at (%a, %a, %a): %s\n", x,
+            y, z, exact_status_name((kerr_exact_status)first_failure->status));
+    free(failures);
+    return 0;
+  }
+
+  free(failures);
   return 1;
 }
 
@@ -566,14 +630,19 @@ static int write_z_profile(
   return 1;
 }
 
-static int evaluate_level(const options *arguments, size_t resolution,
+static int evaluate_level(const options *arguments, const query_point *points,
+                          double minimum_sample_radius, size_t resolution,
                           double half_width, double throat,
-                          FILE *z_profile_stream,
-                          level_summary *summary) {
+                          FILE *z_profile_stream, level_summary *summary) {
   size_t dimension;
   size_t grid_points;
   size_t total_values;
   double *storage;
+  thread_accumulator *thread_accumulators;
+  const kerr_indexed_failure *first_failure;
+  const int max_threads = omp_get_max_threads();
+  int grid_threads = 1;
+  int query_threads = 1;
   const double spacing = 2.0 * half_width / (double)resolution;
   const double start = -half_width - 2.5 * spacing;
   const double minimum_grid_radius = sqrt(3.0) * spacing / 2.0;
@@ -582,9 +651,11 @@ static int evaluate_level(const options *arguments, size_t resolution,
   error_accumulator accumulators[QUANTITY_COUNT][KERR_EXACT_COMPONENT_COUNT] =
       {0};
   error_accumulator aggregate[QUANTITY_COUNT] = {0};
-  uint64_t random_state = arguments->seed;
-  double minimum_sample_radius = INFINITY;
 
+  if (max_threads < 1) {
+    fprintf(stderr, "invalid OpenMP query team size\n");
+    return 0;
+  }
   if (!isfinite(spacing) || spacing <= 0.0 || !isfinite(start) ||
       !compute_grid_sizes(resolution, &dimension, &grid_points, &total_values)) {
     fprintf(stderr, "resolution %zu overflows grid geometry or allocation\n",
@@ -600,7 +671,8 @@ static int evaluate_level(const options *arguments, size_t resolution,
             resolution);
     return 0;
   }
-  if (!fill_grid(storage, dimension, grid_points, start, spacing)) {
+  if (!fill_grid(storage, dimension, grid_points, start, spacing,
+                 &grid_threads)) {
     free(storage);
     return 0;
   }
@@ -629,37 +701,50 @@ static int evaluate_level(const options *arguments, size_t resolution,
     return 0;
   }
 
+  if (multiply_overflows_size_t((size_t)max_threads,
+                                sizeof(*thread_accumulators))) {
+    fprintf(stderr, "OpenMP query accumulator allocation overflows\n");
+    free(storage);
+    return 0;
+  }
+  thread_accumulators = (thread_accumulator *)calloc(
+      (size_t)max_threads, sizeof(*thread_accumulators));
+  if (thread_accumulators == NULL) {
+    fprintf(stderr, "could not allocate OpenMP query accumulators\n");
+    free(storage);
+    return 0;
+  }
+  for (int thread = 0; thread < max_threads; ++thread)
+    kerr_failure_clear(&thread_accumulators[thread].failure);
+
+#pragma omp parallel for schedule(static) default(none)                        \
+    shared(arguments, points, grid, functions, thread_accumulators,            \
+               query_threads)
   for (size_t point = 0; point < arguments->point_count; ++point) {
-    double coordinate[3];
-    double radius;
+    const double *const coordinate = points[point].coordinate;
+    const int thread = omp_get_thread_num();
+    thread_accumulator *const local = &thread_accumulators[thread];
     kerr_exact_value_gradient exact[KERR_EXACT_COMPONENT_COUNT];
     hermite3d_value_gradient interpolated[KERR_EXACT_COMPONENT_COUNT];
-    sample_exterior_point(&random_state, half_width, throat, coordinate,
-                          &radius);
     const kerr_exact_status exact_status =
         kerr_exact_metric_gradient(coordinate[0], coordinate[1], coordinate[2],
                                    exact);
+
+    /* Point zero is unique; the implicit loop barrier publishes this value. */
+    if (point == 0) query_threads = omp_get_num_threads();
+    if (exact_status != KERR_EXACT_SUCCESS) {
+      kerr_failure_record(&local->failure, point, QUERY_FAILURE_EXACT, 0, 0,
+                          (int)exact_status);
+      continue;
+    }
     const hermite3d_status interpolation_status =
         hermite3d_interpolate_value_gradient(
             &grid, coordinate[0], coordinate[1], coordinate[2],
             KERR_EXACT_COMPONENT_COUNT, functions, interpolated);
-
-    if (radius < minimum_sample_radius) minimum_sample_radius = radius;
-    if (exact_status != KERR_EXACT_SUCCESS) {
-      fprintf(stderr,
-              "exact query evaluation failed at point %zu (%a, %a, %a): %s\n",
-              point, coordinate[0], coordinate[1], coordinate[2],
-              exact_status_name(exact_status));
-      free(storage);
-      return 0;
-    }
     if (interpolation_status != HERMITE3D_SUCCESS) {
-      fprintf(stderr,
-              "interpolation failed at point %zu (%a, %a, %a): %s\n",
-              point, coordinate[0], coordinate[1], coordinate[2],
-              hermite_status_name(interpolation_status));
-      free(storage);
-      return 0;
+      kerr_failure_record(&local->failure, point, QUERY_FAILURE_INTERPOLATION,
+                          0, 0, (int)interpolation_status);
+      continue;
     }
 
     for (size_t component = 0; component < KERR_EXACT_COMPONENT_COUNT;
@@ -668,34 +753,95 @@ static int evaluate_level(const options *arguments, size_t resolution,
           (long double)interpolated[component].value -
           (long double)exact[component].value;
       if (!isfinite(value_error)) {
-        fprintf(stderr,
-                "nonfinite value error at point %zu, component %s, r=%a\n",
-                point,
-                kerr_exact_component_name((kerr_exact_component)component),
-                radius);
-        free(storage);
-        return 0;
+        kerr_failure_record(&local->failure, point,
+                            QUERY_FAILURE_NONFINITE_VALUE, component, 0, 0);
+        break;
       }
-      add_error(&accumulators[0][component], value_error);
-      add_error(&aggregate[0], value_error);
+      add_error(&local->component[0][component], value_error);
+      add_error(&local->aggregate[0], value_error);
 
       for (size_t axis = 0; axis < KERR_EXACT_DIMENSION; ++axis) {
         const long double derivative_error =
             (long double)interpolated[component].gradient[axis] -
             (long double)exact[component].gradient[axis];
         if (!isfinite(derivative_error)) {
-          fprintf(stderr,
-                  "nonfinite derivative error at point %zu, component %s, "
-                  "axis %zu, r=%a\n",
-                  point,
-                  kerr_exact_component_name((kerr_exact_component)component),
-                  axis, radius);
-          free(storage);
-          return 0;
+          kerr_failure_record(&local->failure, point,
+                              QUERY_FAILURE_NONFINITE_DERIVATIVE, component,
+                              axis, 0);
+          break;
         }
-        add_error(&accumulators[axis + 1][component], derivative_error);
-        add_error(&aggregate[axis + 1], derivative_error);
+        add_error(&local->component[axis + 1][component], derivative_error);
+        add_error(&local->aggregate[axis + 1], derivative_error);
       }
+      if (local->failure.index == point) break;
+    }
+  }
+
+  first_failure = NULL;
+  for (int thread = 0; thread < query_threads; ++thread) {
+    const kerr_indexed_failure *candidate =
+        &thread_accumulators[thread].failure;
+    if (candidate->index != SIZE_MAX &&
+        (first_failure == NULL || candidate->index < first_failure->index)) {
+      first_failure = candidate;
+    }
+  }
+  if (first_failure != NULL) {
+    const query_point *const failed = &points[first_failure->index];
+    switch ((enum query_failure_kind)first_failure->kind) {
+      case QUERY_FAILURE_EXACT:
+        fprintf(stderr,
+                "exact query evaluation failed at point %zu (%a, %a, %a): "
+                "%s\n",
+                first_failure->index, failed->coordinate[0],
+                failed->coordinate[1], failed->coordinate[2],
+                exact_status_name((kerr_exact_status)first_failure->status));
+        break;
+      case QUERY_FAILURE_INTERPOLATION:
+        fprintf(stderr,
+                "interpolation failed at point %zu (%a, %a, %a): %s\n",
+                first_failure->index, failed->coordinate[0],
+                failed->coordinate[1], failed->coordinate[2],
+                hermite_status_name(
+                    (hermite3d_status)first_failure->status));
+        break;
+      case QUERY_FAILURE_NONFINITE_VALUE:
+        fprintf(stderr,
+                "nonfinite value error at point %zu, component %s, r=%a\n",
+                first_failure->index,
+                kerr_exact_component_name(
+                    (kerr_exact_component)first_failure->detail0),
+                failed->radius);
+        break;
+      case QUERY_FAILURE_NONFINITE_DERIVATIVE:
+        fprintf(stderr,
+                "nonfinite derivative error at point %zu, component %s, "
+                "axis %zu, r=%a\n",
+                first_failure->index,
+                kerr_exact_component_name(
+                    (kerr_exact_component)first_failure->detail0),
+                first_failure->detail1, failed->radius);
+        break;
+      case QUERY_FAILURE_NONE:
+        fprintf(stderr, "unknown parallel query failure at point %zu\n",
+                first_failure->index);
+        break;
+    }
+    free(thread_accumulators);
+    free(storage);
+    return 0;
+  }
+
+  for (int thread = 0; thread < query_threads; ++thread) {
+    for (size_t quantity = 0; quantity < QUANTITY_COUNT; ++quantity) {
+      for (size_t component = 0; component < KERR_EXACT_COMPONENT_COUNT;
+           ++component) {
+        merge_error(&accumulators[quantity][component],
+                    &thread_accumulators[thread]
+                         .component[quantity][component]);
+      }
+      merge_error(&aggregate[quantity],
+                  &thread_accumulators[thread].aggregate[quantity]);
     }
   }
 
@@ -704,6 +850,8 @@ static int evaluate_level(const options *arguments, size_t resolution,
   summary->spacing = spacing;
   summary->minimum_sample_radius = minimum_sample_radius;
   summary->minimum_grid_radius = minimum_grid_radius;
+  summary->grid_threads = grid_threads;
+  summary->query_threads = query_threads;
   for (size_t quantity = 0; quantity < QUANTITY_COUNT; ++quantity) {
     for (size_t component = 0; component < KERR_EXACT_COMPONENT_COUNT;
          ++component) {
@@ -717,6 +865,7 @@ static int evaluate_level(const options *arguments, size_t resolution,
                         (size_t)KERR_EXACT_COMPONENT_COUNT);
   }
 
+  free(thread_accumulators);
   free(storage);
   return 1;
 }
@@ -789,13 +938,15 @@ static void print_results(const options *arguments, const level_summary *levels,
            arguments->z_profile_samples, arguments->z_profile_output);
   }
   printf("\nGrid diagnostics\n");
-  printf("       N   stored              h          min r      min r/h  min grid r\n");
+  printf("       N   stored              h          min r      min r/h  min grid r"
+         " grid thr query thr\n");
   for (size_t level = 0; level < arguments->resolution_count; ++level) {
-    printf("%8zu %8zu %14.6e %14.6e %12.5e %12.5e\n",
+    printf("%8zu %8zu %14.6e %14.6e %12.5e %12.5e %8d %9d\n",
            levels[level].resolution, levels[level].stored_dimension,
            levels[level].spacing, levels[level].minimum_sample_radius,
            levels[level].minimum_sample_radius / levels[level].spacing,
-           levels[level].minimum_grid_radius);
+           levels[level].minimum_grid_radius, levels[level].grid_threads,
+           levels[level].query_threads);
   }
 
   printf("\nThe norms below are finite-cloud sampled RMS (L2) and sampled maxima\n");
@@ -822,6 +973,8 @@ int main(int argc, char **argv) {
   const double throat = kerr_exact_throat_radius();
   const double half_width = 5.0 * throat;
   level_summary *levels;
+  query_point *points;
+  double minimum_sample_radius;
   FILE *z_profile_stream = NULL;
 
   if (parsed == 1) return EXIT_SUCCESS;
@@ -846,12 +999,21 @@ int main(int argc, char **argv) {
     free(arguments.resolutions);
     return EXIT_FAILURE;
   }
+  points = generate_query_cloud(arguments.point_count, arguments.seed,
+                                half_width, throat, &minimum_sample_radius);
+  if (points == NULL) {
+    fprintf(stderr, "could not allocate the random query cloud\n");
+    free(levels);
+    free(arguments.resolutions);
+    return EXIT_FAILURE;
+  }
 
   if (arguments.z_profile_enabled) {
     z_profile_stream = fopen(arguments.z_profile_output, "w");
     if (z_profile_stream == NULL) {
       fprintf(stderr, "could not open z-profile output '%s': %s\n",
               arguments.z_profile_output, strerror(errno));
+      free(points);
       free(levels);
       free(arguments.resolutions);
       return EXIT_FAILURE;
@@ -862,6 +1024,7 @@ int main(int argc, char **argv) {
       fprintf(stderr, "could not write z-profile header to '%s'\n",
               arguments.z_profile_output);
       fclose(z_profile_stream);
+      free(points);
       free(levels);
       free(arguments.resolutions);
       return EXIT_FAILURE;
@@ -870,9 +1033,11 @@ int main(int argc, char **argv) {
 
   for (size_t level = 0; level < arguments.resolution_count; ++level) {
     fprintf(stderr, "evaluating N=%zu ...\n", arguments.resolutions[level]);
-    if (!evaluate_level(&arguments, arguments.resolutions[level], half_width,
-                        throat, z_profile_stream, &levels[level])) {
+    if (!evaluate_level(&arguments, points, minimum_sample_radius,
+                        arguments.resolutions[level], half_width, throat,
+                        z_profile_stream, &levels[level])) {
       if (z_profile_stream != NULL) fclose(z_profile_stream);
+      free(points);
       free(levels);
       free(arguments.resolutions);
       return EXIT_FAILURE;
@@ -883,6 +1048,7 @@ int main(int argc, char **argv) {
     if (fclose(z_profile_stream) != 0) {
       fprintf(stderr, "could not finish z-profile output '%s': %s\n",
               arguments.z_profile_output, strerror(errno));
+      free(points);
       free(levels);
       free(arguments.resolutions);
       return EXIT_FAILURE;
@@ -891,6 +1057,7 @@ int main(int argc, char **argv) {
   }
 
   print_results(&arguments, levels, throat, half_width);
+  free(points);
   free(levels);
   free(arguments.resolutions);
   return EXIT_SUCCESS;
