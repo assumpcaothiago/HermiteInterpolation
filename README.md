@@ -26,6 +26,8 @@ interpolated at that point.
   fourth-order finite differences of its interpolated values.
 - [`geodesic_notes/`](geodesic_notes/) derives timelike geodesic evolution in
   ADM Hamiltonian variables and explains the role of interpolation smoothness.
+- [`kerr_geodesic/`](kerr_geodesic/) evolves a stable circular Kerr orbit with
+  exact, Hermite, and Lagrange-plus-finite-difference ADM data.
 - [`references/`](references/) contains the source material used when deriving
   and checking the mathematics.
 - [`mathematica_notebooks/`](mathematica_notebooks/) contains earlier symbolic
@@ -158,6 +160,25 @@ retaining clean analytic references:
 OMP_NUM_THREADS=8 make -C kerr_adm_comparison run \
     ARGS='--resolutions 200,400 --points 10000 --noise-epsilon 1e-8'
 ```
+
+## Run the Kerr geodesic experiment
+
+The dynamical experiment evolves a stable prograde circular orbit at
+`R_BL=5` for ten periods by default. It compares exact analytic ADM data,
+Hermite values with derivatives of the same interpolant, and Lagrange values
+with fourth-order finite-difference gradients:
+
+```sh
+make -C kerr_geodesic check
+OMP_NUM_THREADS=8 make -C kerr_geodesic run \
+    ARGS='--resolutions 64,96,128'
+```
+
+Optional deterministic grid noise lets the same executable compare accumulated
+trajectory and invariant drift from noisy samples. Trajectory CSV output and a
+Matplotlib diagnostic plot are also available. See the
+[geodesic experiment README](kerr_geodesic/README.md) for the orbit, RK4
+control, error definitions, and plotting interface.
 
 ## Run the Kerr convergence experiment
 
